@@ -27,7 +27,7 @@ One process per terminal, from the repository root:
 ```sh
 q tick.q sym ./log -p 5010            # tickerplant
 q tick/r.q :5010 -p 5011              # RDB
-q sym.q -p 5012                       # HDB
+q log/sym -p 5012                     # HDB (date partitions land here at end of day)
 q tick/chainedtick.q :5010 -p 5013    # chained tickerplant
 q tca.q :5013 -p 5014                 # TCA engine
 q feed.q :5010                        # synthetic feed

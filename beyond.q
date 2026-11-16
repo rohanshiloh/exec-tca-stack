@@ -99,3 +99,22 @@
   f:update szBucket:`sm`md`lg 0 300 500 bin lastQty,
            cost:1e4*.b.buyorsell[side]*(arrivalMid-lastPx)%arrivalMid from f;
   update pct:100*(rank cost)%count i by side, szBucket from f };
+
+/ ── D2 outliers ──────────────────────────────────────────────────────────
+/ clamp each value into [lo;hi] so one busted print cannot move a mean
+.b.winsor:{[x;lo;hi] lo | hi & x };
+
+/ ── the algo wheel: fit slippage to its drivers ──────────────────────────
+/ ordinary least squares, beta = (X'X)^-1 X'y ; X is a list of rows
+.b.wheelFit:{[X;y] (inv flip[X] mmu X) mmu flip[X] mmu y };
+
+/ one row per parent: the slippage it earned and the conditions it faced
+.b.wheelFeatures:{[parent;trade;execs;ord]
+  a:.b.arrival[parent;execs] lj .b.cohort ord;
+  p:`parentOrderID xkey select parentOrderID,pov from .b.participation[parent;trade;execs];
+  m:select passiveShare:avg liq="A", toxicShare:avg venue=`EDGX, darkShare:avg venue in `MLIT`INTL
+      by parentOrderID from execs where execType="F";
+  t:(a lj p) lj m;
+  select parentOrderID, slipBps, limited:`float$cohort=`limited, pov, sizeK:qty%10000,
+         passiveShare, toxicShare, darkShare
+    from t where not null slipBps, not null pov, pov<0w };

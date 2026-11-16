@@ -5,7 +5,10 @@
 / (a buy that paid below the benchmark, a sell that sold above it).
 
 \d .b
-buyorsell:{?[x="B"; 1f; -1f]};                  / +1 buy, -1 sell (not signum: side is a char)
+buyorsell:{?[x="B"; 1f; -1f]};
+/ A fill and its tape print are stamped by the tickerplant a moment apart, so a
+/ tape window that ends exactly on the last fill would miss that fill's own print.
+tapeLag:0D00:00:00.050;                  / +1 buy, -1 sell (not signum: side is a char)
 
 / ── arrival price / implementation shortfall ────────────────────────────
 / arrivalMid is stamped on the parent at the moment it arrived (see tca.q).
@@ -32,7 +35,7 @@ shortfall:{[parent;execs;decisionMid;endPx]
 ivwap:{[parent;trade;execs]
   sp:0!select startTime:min time, endTime:max time, averageFillPrice:(sum lastPx*lastQty)%sum lastQty
        by parentOrderID, sym, side from execs where execType="F";
-  f:{[t;sy;s;e] v:t where (t`sym)=sy; v@:where v[`time] within (s;e);
+  f:{[t;sy;s;e] v:t where (t`sym)=sy; v@:where v[`time] within (s;e+.b.tapeLag);
        $[count v; (v`size) wavg v`px; 0n]}[trade];
   vw:f'[sp`sym; sp`startTime; sp`endTime];
   update vwap:vw, slipBps:1e4*.b.buyorsell[side]*(vw-averageFillPrice)%vw from sp };
@@ -85,7 +88,7 @@ ofi:{[quote;w]
 / realised participation: executed shares / tape volume in the parent's window.
 participation:{[parent;trade;execs]
   sp:0!select startTime:min time, endTime:max time, executedQty:sum lastQty by parentOrderID, sym from execs where execType="F";
-  f:{[t;sy;s;e] sum (t where (t`sym)=sy)[`size] where (t where (t`sym)=sy)[`time] within (s;e)}[trade];
+  f:{[t;sy;s;e] sum (t where (t`sym)=sy)[`size] where (t where (t`sym)=sy)[`time] within (s;e+.b.tapeLag)}[trade];
   update pov:executedQty%0f+f'[sp`sym;sp`startTime;sp`endTime] from sp };
 
 / square-root pre-trade cost estimate (bps): cost = C · sigma · sqrt(Q/ADV).

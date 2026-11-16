@@ -55,3 +55,8 @@ pwp:{ .b.pwpTable[parent;trade;execs;0.2] };
 bands:{ .b.pitBands[execs;quote] };
 context:{ .b.contextNorm[parent;execs;quote] };
 peers:{ .b.pctScore[parent;execs] };
+/ the wheel: bps of arrival slippage attributable to each driver
+wheel:{ f:.b.wheelFeatures[parent;trade;execs;ord];
+  X:flip (count[f]#1f; f`limited; f`pov; f`sizeK; f`passiveShare; f`toxicShare; f`darkShare);
+  ([] driver:`intercept`limited`pov`sizeK`passiveShare`toxicShare`darkShare;
+      bpsPerUnit:.b.wheelFit[X; f`slipBps]) };

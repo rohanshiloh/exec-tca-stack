@@ -26,7 +26,7 @@ windows:
         layout:
           cwd: ~/Code/exec-tca-stack
           commands:
-            - exec: printf "\033]0;HDB 5012\007"; q sym.q -p 5012
+            - exec: printf "\033]0;HDB 5012\007"; q log/sym -p 5012
       - title: CHAIN 5013
         color: magenta
         layout:
