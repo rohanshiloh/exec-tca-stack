@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# exec-tca-stack: KX tickerplant (fetched by setup.sh), logs, diagnostics
+tick.q
+tick/
+log/
+tcaData.txt
+*.bak*
