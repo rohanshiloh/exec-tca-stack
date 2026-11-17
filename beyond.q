@@ -6,7 +6,7 @@
 / ── F1 robust arrival ────────────────────────────────────────────────────
 / median mid over [arrivalTime; arrivalTime+w], not a single snapshot
 .b.robustArrival:{[parent;quote;w]
-  g:{[q;sy;t;w] m:q where (q`sym)=sy; m@:where m[`time] within (t;t+w);
+  g:{[q;sy;t;w] m:select bid,ask from q where sym=sy, time within (t;t+w);
        $[count m; med 0.5*m[`bid]+m`ask; 0n]}[quote];
   p:0!parent;
   update arrivalMidRobust:g'[p`sym;p`arrivalTime;w] from p };
@@ -31,7 +31,7 @@
 / ── F3 marketable vs limited ─────────────────────────────────────────────
 / VWAP over only the prints a limit order could have traded against
 .b.limVwap:{[trade;sy;startTime;endTime;side;lim]
-  v:trade where (trade`sym)=sy; v@:where v[`time] within (startTime;endTime);
+  v:select px,size from trade where sym=sy, time within (startTime;endTime);
   v@:where $[side="B"; v[`px]<=lim; v[`px]>=lim];   / in-limit only
   $[count v; (v`size) wavg v`px; 0n] };
 
@@ -84,8 +84,9 @@
   w:select startTime:min time, endTime:max time by parentOrderID
       from execs where execType="F";
   a:a lj w;
-  mv:{[q;sy;startTime;endTime] b:q where (q`sym)=sy; m:0.5*b[`bid]+b`ask;
-       m0:last m where b[`time]<=startTime; m1:last m where b[`time]<=endTime;
+  mv:{[q;sy;startTime;endTime]
+       m0:exec last 0.5*bid+ask from q where sym=sy, time<=startTime;
+       m1:exec last 0.5*bid+ask from q where sym=sy, time<=endTime;
        1e4*(m1-m0)%m0}[quote];
   mk:mv'[a`sym;a`startTime;a`endTime];
   update mktBps:neg .b.buyorsell[side]*mk,

@@ -3,7 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="Execution benchmarks and transaction cost analysis on a live tick stack in q/kdb+: arrival, VWAP, markouts, spreads, with labs and diagrams.">
+<meta name="description" content="Execution benchmarks and transaction cost analysis on a live tick stack in q/kdb+: arrival slippage, implementation shortfall, VWAP, TWAP, PWP, markouts, spread capture, OFI and the algo wheel, with diagrams and labs.">
+<link rel="canonical" href="https://rohanshiloh.github.io/exec-tca-stack/">
+<meta property="og:title" content="Anatomy of a Fill: Execution Benchmarks &amp; TCA in q/kdb+">
+<meta property="og:description" content="Execution benchmarks and transaction cost analysis on a live tick stack in q/kdb+: arrival slippage, implementation shortfall, VWAP, TWAP, PWP, markouts, spread capture, OFI and the algo wheel, with diagrams and labs.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://rohanshiloh.github.io/exec-tca-stack/">
+<meta name="twitter:card" content="summary">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com">
 <style>:root{color-scheme:light;box-sizing:border-box}*,*::before,*::after{box-sizing:inherit}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Anatomy of a Fill</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,500;1,500;1,600&family=Schibsted+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -178,6 +187,16 @@ footer .ok{color:var(--ok);font-weight:600}
 @media (max-width:860px){.mistakes,.rules{grid-template-columns:1fr}}
 .companion{font-size:12.5px;color:var(--muted);border-left:2px solid var(--lav);padding-left:10px;max-width:640px}
 .companion a{color:var(--accent)}
+code,pre,th,h1,h2,h3,h4,.byline,.meta,.toc{hyphens:none;-webkit-hyphens:none}
+.themebtn,.expandbtn{font:inherit;font-size:11.5px;color:var(--muted);background:none;border:1px solid var(--rule);border-radius:4px;padding:2px 8px;cursor:pointer}
+.themebtn:hover,.expandbtn:hover{color:var(--fg);border-color:var(--muted)}
+.themebtn:focus-visible,.expandbtn:focus-visible,.totop:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.expandbtn{margin:0 0 10px}
+.totop{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:5;font-size:11.5px;
+  color:var(--muted);background:var(--bg);border:1px solid var(--rule);border-radius:999px;padding:5px 11px;text-decoration:none;opacity:.9}
+.totop:hover{color:var(--fg)}
+@media print{.totop,.themebtn,.expandbtn,.copy{display:none!important}body{background:#fff}.sheet{border:0;box-shadow:none;max-width:none;margin:0;padding:0}
+  details.srcfile>.body{display:block}section{break-inside:auto}figure,.lab,.shard-note{break-inside:avoid}}
 /* source file panes */
 .srcfiles{display:flex;flex-direction:column;gap:10px}
 .srcfile{border:1px solid var(--line);border-radius:4px;overflow:hidden;background:var(--sheet)}
@@ -219,15 +238,15 @@ mjx-container svg{max-width:100%}
 <div class="sheet">
 <header>
   <div class="titleblock"><h1>Anatomy of a Fill<span class="subtitle">Execution Benchmarks &amp; TCA on a Live Tick Stack in <span style="font-variant-caps:normal;font-feature-settings:normal">q/KDB+</span></span></h1><div class="byline">Editor: Rohan Shiloh Shah · <a href="https://rohanshiloh.github.io/exec-tca-stack/" style="color:inherit;text-decoration:none">rohanshiloh.github.io/exec-tca-stack</a></div></div>
-  <div class="meta">KDB-X Community Edition<br>~/Code/exec-tca-stack<br>equities · regular hours · signed bps</div>
+  <div class="meta">KDB-X Community Edition<br>~/Code/exec-tca-stack<br>equities · regular hours · signed bps<br><button class="themebtn" id="themebtn" type="button" aria-label="Switch colour theme">Theme: auto</button></div>
 </header>
 
 <p class="abstract">A small, complete tick stack for execution analysis: a synthetic feed drives quotes, the tape, and a stream of parent and child orders through a tickerplant; a chained tickerplant isolates a complex-event processor (CEP) that stamps arrival price on every parent and computes the benchmarks a desk actually argues about — arrival price and implementation shortfall (IS), VWAP, TWAP, markouts, effective and realised spread, a venue scorecard, and order-flow imbalance. Every number is one <code>aj</code> or one <code>select … by</code> away from the raw events, and the same engine runs live on today and in batch over a replayed log.</p>
 
-<nav class="toc" aria-label="Contents">
-  <div><h4><a href="#intro">Why Measure a Fill</a></h4><ol><li><a href="#slicing-h">An Order Trades in Pieces</a></li><li><a href="#book-h">The Book &amp; the Spread</a></li><li><a href="#cost-h">What a Fill Costs</a></li><li><a href="#intro-bench">A Benchmark Is a Yardstick</a></li><li><a href="#intro-loop">The TCA Loop</a></li><li><a href="#why-kdb">Why kdb+</a></li></ol></div>
-  <div><h4><a href="#glossary">The Vocabulary</a></h4><ol><li><a href="#glossary"><span class="tn">·</span>43 terms, one page</a></li><li><a href="#glossary"><span class="tn">·</span>Common mistakes per term</a></li></ol></div>
-  <div><h4><a href="#overview">How It Fits Together</a></h4><ol><li><a href="#arch">The Stack</a></li><li><a href="#chained-note">Why a Chained TP</a></li><li><a href="#tables">Four Event Tables</a></li><li><a href="#timeline">One Parent, Every Benchmark</a></li><li><a href="#signed-bps">The Signed-bps Convention</a></li><li><a href="#nbbo">One Quote Is Not the NBBO</a></li><li><a href="#internalise">Internalisation</a></li></ol></div>
+<nav class="toc" id="contents" aria-label="Contents">
+  <div><h4><a href="#intro">Why Measure a Fill</a></h4><ol><li><a href="#slicing-h">An Order Trades in Pieces</a></li><li><a href="#book-h">The Book &amp; the Spread</a></li><li><a href="#cost-h">What a Fill Costs</a></li><li><a href="#intro-bench">A Benchmark Is a Yardstick</a></li><li><a href="#intro-loop">The TCA Loop</a></li><li><a href="#signed-bps">One Sign Convention</a></li><li><a href="#why-kdb">Why kdb+</a></li></ol></div>
+  <div><h4><a href="#glossary">The Vocabulary</a></h4><ol><li><a href="#glossary"><span class="tn">·</span>44 terms, one page</a></li><li><a href="#glossary"><span class="tn">·</span>Common mistakes per term</a></li></ol></div>
+  <div><h4><a href="#overview">How It Fits Together</a></h4><ol><li><a href="#arch">The Stack</a></li><li><a href="#chained-note">Why a Chained TP</a></li><li><a href="#tables">Four Event Tables</a></li><li><a href="#timeline">One Parent, Every Benchmark</a></li><li><a href="#nbbo">One Quote Is Not the NBBO</a></li><li><a href="#internalise">Internalisation</a></li></ol></div>
   <div><h4><a href="#source">The Source</a></h4><ol><li><a href="#source">How It Connects</a></li><li><a href="#src-warp">warp.yaml</a></li><li><a href="#src-sym">sym.q</a></li><li><a href="#src-feed">feed.q</a></li><li><a href="#src-engine">engine.q</a></li><li><a href="#src-bench">bench.q</a></li><li><a href="#src-tca">tca.q</a></li><li><a href="#src-replay">replay.q</a></li><li><a href="#src-rescue">rescue.q</a></li><li><a href="#src-lab">lab.q</a></li><li><a href="#src-beyond">beyond.q</a></li><li><a href="#src-dump">dump.q</a></li></ol></div>
   <div><h4><a href="#run">Run It</a></h4><ol><li><a href="#step-01"><span class="tn">01</span>Check q</a></li><li><a href="#step-02"><span class="tn">02</span>The Files</a></li><li><a href="#step-03"><span class="tn">03</span>Clean Up</a></li><li><a href="#step-04"><span class="tn">04</span>Start, One Process per Tab</a></li><li><a href="#step-05"><span class="tn">05</span>Check It's Up</a></li><li><a href="#step-06"><span class="tn">06</span>Ask the CEP</a></li><li><a href="#step-07"><span class="tn">07</span>Stop</a></li></ol></div>
   <div><h4><a href="#benchmarks">The Benchmarks</a></h4><ol><li><a href="#bm-arrival"><span class="tn">·</span>Arrival / IS</a></li><li><a href="#bm-vwap"><span class="tn">·</span>VWAP · TWAP · PWP · Close</a></li><li><a href="#bm-markout"><span class="tn">·</span>Markouts &amp; Spread</a></li><li><a href="#bm-pwp"><span class="tn">·</span>PWP &amp; the Range</a></li><li><a href="#bm-opp"><span class="tn">·</span>Opportunity Cost</a></li><li><a href="#bm-blind"><span class="tn">·</span>What Each One Is Blind To</a></li><li><a href="#bm-cheat"><span class="tn">★</span>The Cheat Sheet</a></li><li><a href="#bm-which"><span class="tn">?</span>Which One Should I Use?</a></li><li><a href="#bm-notation"><span class="tn">≡</span>Notation</a></li></ol></div>
@@ -243,7 +262,7 @@ mjx-container svg{max-width:100%}
     <li><a href="#lab-d2"><span class="tn">D2</span>Pre-trade Cost &amp; Outliers</a></li>
     <li><a href="#lab-e1"><span class="tn">E1</span>The Chained-TP Firewall</a></li>
     <li><a href="#lab-e2"><span class="tn">E2</span>Recover a Corrupt Log</a></li>
-    <li><a href="#lab-e3"><span class="tn">E3</span>Replay Yesterday</a></li>
+    <li><a href="#lab-e3"><span class="tn">E3</span>Replay Yesterday</a></li><li><a href="#lab-e4"><span class="tn">E4</span>Force an End of Day</a></li>
   </ol></div>
   <div><h4><a href="#labs-advanced">Beyond Vanilla</a></h4><ol>
     <li><a href="#lab-f1"><span class="tn">F1</span>Robust Arrival (median 1s)</a></li>
@@ -264,10 +283,12 @@ mjx-container svg{max-width:100%}
 <!-- ───────────── INTRODUCTION ───────────── -->
 <section class="part annot" id="intro">
   <h2>Why Measure a Fill</h2>
+  <p class="lead"><b>Part II of two.</b> Part I, <a href="https://rohanshiloh.github.io/order-trade-lifecycle/">The Order &amp; Trade Lifecycle</a>, follows an instruction from the investment decision through routing, execution, clearing and settlement. This document starts where that one ends, at the fill, and asks the question that is left once a trade has happened: was it a good one?</p>
+  <p class="lead"><b>The whole argument in one paragraph.</b> Every benchmark here is the same question asked with a different reference price: <i>compared with what?</i> Arrival compares the fill with the mid when the order reached the desk. VWAP and TWAP compare it with an average over a window. A markout compares it with the mid a few seconds later. Computing any of them is a time-correct lookup of that reference price, and in kdb+ that is an as-of join or a window aggregate over tables you already have. The rest of the document is that idea, worked through.</p>
   <p class="companion">Companion · <a href="https://rohanshiloh.github.io/order-trade-lifecycle/">The Order &amp; Trade Lifecycle</a>: where the order comes from and where the fill goes — <a href="https://rohanshiloh.github.io/order-trade-lifecycle/#oms">the OMS</a>, <a href="https://rohanshiloh.github.io/order-trade-lifecycle/#ems">the EMS</a>, <a href="https://rohanshiloh.github.io/order-trade-lifecycle/#execution-stack">what an order really becomes</a> and <a href="https://rohanshiloh.github.io/order-trade-lifecycle/#fig-slicing">how a parent is sliced</a>.</p>
   <p class="lead">Transaction cost analysis — TCA — answers a plain question: when you bought or sold a stock, did you get a good price, and if not, where did the money go? Trading isn't free even when nobody charges a commission, because the act of buying nudges the price up against you. This section builds the idea from the ground up — <i>order</i>, <i>book</i>, <i>spread</i>, <i>fill</i>, <i>benchmark</i> — so the sharper terms in the rest of the document have something to stand on. The headline it all leads to: the spread you crossed is the small, visible part of the cost; the price that drifted while you worked the order is usually the larger, invisible one.</p>
   <h3 id="slicing-h"><a id="slicing" style="position:absolute" aria-hidden="true"></a><span class="n">1</span>An Order Trades in Pieces</h3>
-  <p class="lead">An <b>order</b> is just an instruction: buy — or sell — a certain number of shares of one stock. A large order (traders call it the <i>parent</i>)<span class="mnote"><b>Parent &amp; child.</b> The parent is the whole order; children are the slices actually sent to market. One parent → many children → many fills, all tied together by a parent id.</span> almost never trades all at once, because pushing 100,000 shares into the market in one go would shove the price against you. Instead a system cuts it into many small <i>child</i> orders and releases them over seconds, minutes or hours. Each child that actually trades comes back as a <b>fill</b> — a receipt saying "you got this many shares at this price." Every trade that prints also lands on a public record called the <b>tape</b> — the trades half of what the industry calls <i>TAQ</i> data (<b>T</b>rades <b>a</b>nd <b>Q</b>uotes)<span class="mnote"><b>TAQ.</b> Originally NYSE’s Trade-and-Quote dataset; now the generic name for combined trade + quote data. In the US the consolidated feeds (the SIP) carry the public tape.</span>; the quotes are the other half.</p>
+  <p class="lead">An <b>order</b> is just an instruction: buy — or sell — a certain number of shares of one stock. A large order (traders call it the <i>parent</i>)<span class="mnote"><b>Parent &amp; child.</b> The parent is the whole order; children are the slices actually sent to market. One parent → many children → many fills, all tied together by a parent id.</span> almost never trades all at once, because pushing 100,000 shares into the market in one go would shove the price against you. Instead a system cuts it into many small <i>child</i> orders and releases them over seconds, minutes or hours. Each child that actually trades comes back as a <b>fill</b> — a receipt saying "you got this many shares at this price." Every trade that prints also lands on a public record called the <b>tape</b> — the trades half of what the industry calls <i>TAQ</i> data (<b>T</b>rades <b>a</b>nd <b>Q</b>uotes)<span class="mnote"><b>TAQ.</b> Originally NYSE’s Trade-and-Quote dataset; now the generic name for combined trade + quote data. In the US the consolidated feeds (the SIP) carry the public tape.</span>; the quotes are the other half.<span class="mnote"><b>Three levels here, four in practice.</b> This stack models parent, child and fill. On a real desk an algo order sits between parent and child, so the slice the router places is one level further down. Keep an id for that middle level and you can separate what the algo cost from what the router cost.</span></p>
   <figure id="fig-slicing">
     <div class="fig">
 <svg viewBox="0 0 960 290" role="img" aria-label="One parent order to buy 100,000 shares is sliced into small child orders, each sent to a different trading venue over time. No single venue sees the whole order.">
@@ -396,7 +417,7 @@ mjx-container svg{max-width:100%}
 </svg>
     </div>
     <div class="eq" style="text-align:center;margin:2px 0">\[ \underbrace{\bar P_{\text{fill}}-P_{\text{arr}}}_{\text{implementation shortfall}}\;=\;\underbrace{\bar P_{\text{fill}}-\bar M}_{\text{spread — visible}}\;+\;\underbrace{\bar M-P_{\text{arr}}}_{\text{drift / impact — invisible}} \]</div>
-    <figcaption><b>One buy, worked over time.</b> The quoted band drifts up as the order trades; each fill lifts the ask. Measured against the arrival mid, the realised cost splits in two: the half-spread crossed on every fill — small and visible — and the drift of the mid itself while you worked, <span style="font-variant-caps:normal"><code>M̄ − arrival mid</code></span> — usually larger, and invisible unless you measure it. Most of TCA is about that second part.</figcaption>
+    <figcaption><b>One buy, worked over time.</b> The quoted band drifts up as the order trades; each fill lifts the ask. Measured against the arrival mid, the realised cost splits in two: the half-spread crossed on every fill — small and visible — and the drift of the mid itself while you worked, <span style="font-variant-caps:normal"><code>M̄ − arrival mid</code></span> — usually larger, and invisible unless you measure it. Most of TCA is about that second part. What the price does <i>after</i> the last fill is the other half of the story: if it falls back, the move was temporary impact you paid for; if it stays, it was information. <a href="#fig-markouts">The markout curves</a> pick up exactly where this figure stops.</figcaption>
   </figure>
   <p>That drift has sharper names you'll meet later — <i>market impact</i> (the move you cause), <i>adverse selection</i> and venue <i>toxicity</i> (trading right before the price moves against you) — but they are all the same plain idea: the price you end up with is worse than the price you first saw. The whole stack exists to pin down how much worse, and why.</p>
   <p>Those four names get conflated constantly, including by people who should know better. They are different phenomena with different causes, and the fix for each is different:</p>
@@ -453,6 +474,12 @@ mjx-container svg{max-width:100%}
     </div>
     <figcaption>The loop that makes TCA worth running. Pre-trade sets an expectation; in-flight spends against it; post-trade scores the result and hands the venue scorecard back to the router and the realised cost back to the model. A number that doesn't close this loop — that nobody routes on — is just bookkeeping.</figcaption>
   </figure>
+  <div id="signed-bps" class="shard-note">
+    <div class="note-title">One Sign Convention</div>
+    <p>Every benchmark in this document returns basis points <b>signed so that positive is favourable to the order</b>: a buy that paid below the benchmark, a sell that sold above it. The sign lives in one helper, <code>.b.buyorsell</code>, which is <code>+1</code> for a buy and <code>-1</code> for a sell. Bps are <code>1e4 * (price difference) % reference</code>, so a markout of <code>-2.5</code> on a buy means the mid fell two and a half basis points against you after the fill.</p>
+    <p>There are two exceptions, both measuring a cost paid, where <b>positive means cost</b>: the spread measures in <code>.b.spreads</code> (effective, realised, impact), which follow the sign every microstructure paper uses, and the fee measures in <code>.b.feeAware</code> (spread paid, fee, all-in). Their column names say so and the rest of the document does not repeat this.</p>
+  </div>
+
   <div class="shard-note" id="why-kdb">
     <div class="note-title">Why This Lives in kdb+</div>
     <p>Every number in TCA is a join against time: each fill to the quote that prevailed at that instant, each order to the volume on the tape across its window, each placement to the book as it stood when the router decided. That is <code>aj</code> — the as-of join — over a columnar history of hundreds of millions of events a day. The measurement <i>is</i> the query, which is why the same handful of lines run live on today's stream and in batch over a year of partitions, and why point-in-time correctness (§<a href="#pit">Benchmarks</a>) is the default rather than a feature.</p>
@@ -466,13 +493,14 @@ mjx-container svg{max-width:100%}
   <div class="tbl"><table class="wide gloss">
     <thead><tr><th>Term</th><th>What it is</th><th>Concretely</th><th>In this stack</th><th>Common mistake</th></tr></thead>
     <tbody><tr><td>Parent order</td><td>The full instruction from the desk or PM.</td><td>“Buy 50,000 AAPL, work it this morning.”</td><td>the <code>parent</code> table, keyed by <code>parentOrderID</code></td><td>Storing it as a fact instead of the fold of its fills.</td></tr>
-      <tr><td>Child order</td><td>One slice the algo actually sends to a venue.</td><td>300 shares to ARCA at the touch.</td><td><code>ord</code> rows carrying a <code>childOrderID</code></td><td>Scoring children individually — cost belongs to the parent.</td></tr>
+      <tr><td>Child order</td><td>One slice the algo actually sends to a venue.</td><td>300 shares to ARCA at the touch.</td><td><code>ord</code> rows carrying a <code>childOrderID</code></td><td>Scoring children individually — cost belongs to the parent. In this feed the parent's NEW row on <code>ord</code> carries <code>childOrderID = parentOrderID</code>; the child ids (<code>C1</code>, <code>C2</code>, …) appear on <code>execs</code>.</td></tr>
       <tr><td>Fill</td><td>A child order, or part of one, that traded.</td><td>180 of those 300 printed at 182.41.</td><td><code>execs where execType="F"</code></td><td>Forgetting one child can produce many fills.</td></tr>
       <tr><td>Fill rate</td><td>Shares executed ÷ shares ordered.</td><td>42,000 of 50,000 → 0.84.</td><td><code>filledQty%qty</code></td><td>Quoting slippage without it. A great price on 10% filled is not a good execution.</td></tr>
+      <tr><td>Resting order book (ROB)</td><td>Every order that has been posted to a venue and is still waiting: not yet filled, not cancelled. It is what an incoming order trades against.</td><td>your 300-share bid at 182.40 sits in it until someone sells to you or you cancel.</td><td><code>bsize</code>, <code>asize</code> are its top level; a <code>liq="A"</code> fill came out of it</td><td>Taking the displayed size as all of it. Hidden and iceberg orders rest there too.</td></tr>
       <tr><td>Order book</td><td>The live ladder of resting orders at each price.</td><td>500 bid @182.40, 800 offered @182.42.</td><td>the <code>quote</code> table, per venue</td><td>Rebuilding it after the fact instead of stamping it at placement.</td></tr>
       <tr><td>Touch</td><td>The best bid and ask — what you can trade against right now.</td><td>182.40 / 182.42.</td><td><code>bid</code>, <code>ask</code>, <code>bsize</code>, <code>asize</code></td><td>Confusing one venue's touch with the NBBO.</td></tr>
       <tr><td>Spread</td><td>Ask minus bid: the toll for immediacy.</td><td>0.02 on a $182 stock ≈ 1.1 bps.</td><td><code>ask-bid</code></td><td>Quoting it in cents across stocks of different prices rather than in bps.</td></tr>
-      <tr><td>Mid</td><td>The midpoint of the touch — the nearest thing to one fair price.</td><td>182.41</td><td><code>0.5*bid+ask</code> (bracket form)</td><td><code>0.5*m`bid+m`ask</code> parses right-to-left and throws <code>'type</code>.</td></tr>
+      <tr><td>Mid</td><td>The midpoint of the touch — the nearest thing to one fair price.</td><td>182.41</td><td><code>0.5*(bid+ask)</code></td><td>Writing <code>0.5*m`bid+m`ask</code> on a table <code>m</code>. q reads right to left, so it evaluates <code>`bid+m`ask</code> first: a symbol plus a column of floats, which is a <code>'type</code> error. Bracket each lookup: <code>0.5*(m`bid)+(m`ask)</code>.</td></tr>
       <tr><td>NBBO</td><td>Highest bid and lowest ask across <i>all</i> lit venues.</td><td>ARCA 182.40, NSDQ 182.41 → NBB 182.41.</td><td><code>max bid</code>, <code>min ask</code> by sym over lit venues</td><td>Using one venue's quote as the reference mid — see the callout in §2.</td></tr>
       <tr><td>Lit venue</td><td>An exchange that publicly displays its book.</td><td>ARCA, NASDAQ, BATS, EDGX.</td><td><code>venue in lit</code></td><td>—</td></tr>
       <tr><td>Dark pool</td><td>A venue that matches without displaying, usually at the mid.</td><td>MLIT, filling at 182.41.</td><td><code>liq="M"</code></td><td>Expecting its prints on the tape instantly — they report late.</td></tr>
@@ -509,7 +537,7 @@ mjx-container svg{max-width:100%}
       <tr><td>OMS / EMS</td><td>Order management system owns the parent (intent, compliance); execution management system owns the children.</td><td>the PM's ticket vs the algo's slices.</td><td><code>ord</code> events vs <code>execs</code></td><td>—</td></tr>
       <tr><td>Basis point</td><td>One hundredth of one percent. The unit all of this is quoted in.</td><td>0.02 on 182.41 ≈ 1.1 bps.</td><td><code>1e4*diff%reference</code></td><td>Mixing bps and cents in one table.</td></tr></tbody>
   </table></div>
-  <p class="notice">Throughout, <span class="eq" style="display:inline-block">\(\phi\)</span> is <code>+1</code> for a buy and <code>-1</code> for a sell — <code>.b.buyorsell</code> in the code — and every bps figure is signed so that <b>positive is favourable</b>, except effective spread, realised spread and impact, where positive means cost paid. That exception is the single most common source of a sign error at 4pm.</p>
+  <p class="notice">Signs follow <a href="#signed-bps">one convention</a>, stated once in the Introduction.</p>
 </section>
 
 <!-- ───────────── OVERVIEW ───────────── -->
@@ -606,7 +634,18 @@ mjx-container svg{max-width:100%}
     </table>
     </div>
     <p style="margin-top:10px"><code>parentOrderID</code> ties every child and every fill back to its parent, so rollup is a <code>by parentOrderID</code> group-by and never a join. <code>liq</code> on <code>execs</code> records how the fill happened — <code>"R"</code> removed lit liquidity (you crossed), <code>"A"</code> added it (you rested and were hit), <code>"M"</code> matched at a dark midpoint, <code>"I"</code> internalised against the broker's own book — which is what lets the scorecard hold house flow apart from the street, and the fee model (Lab F2) charge each one correctly. The table is named <code>execs</code>, not <code>exec</code>, because <code>exec</code> is a reserved q keyword: <code>exec:([]…)</code> is a parse error.</p>
-  </div>
+      <p class="lead">For readers coming from the companion document or from raw FIX, the names line up as follows.</p>
+    <div class="tbl"><table class="wide">
+      <thead><tr><th>Here</th><th>FIX tag</th><th>In the lifecycle document</th></tr></thead>
+      <tbody>
+        <tr><td><code>parentOrderID</code></td><td>OrderID (37) of the parent</td><td><code>poid</code></td></tr>
+        <tr><td><code>childOrderID</code></td><td>ClOrdID (11)</td><td><code>oid</code></td></tr>
+        <tr><td><code>execType</code></td><td>ExecType (150)</td><td>the order state machine</td></tr>
+        <tr><td><code>lastPx</code>, <code>lastQty</code></td><td>LastPx (31), LastQty (32)</td><td>the fill</td></tr>
+        <tr><td><code>leaves</code>, <code>cumQty</code></td><td>LeavesQty (151), CumQty (14)</td><td>the running totals</td></tr>
+      </tbody>
+    </table></div>
+</div>
 
   <figure id="timeline"><a id="fig-timeline" style="position:absolute" aria-hidden="true"></a>
     <div class="fig">
@@ -659,15 +698,8 @@ mjx-container svg{max-width:100%}
   </g>
 </svg>
     </div>
-    <figcaption>One parent buy, and where every benchmark reads the price. <b>Arrival</b> is the mid when the order reached the desk; slippage is the average fill against it. <b>Interval VWAP</b> is the tape over the fills' own window. <b>Markouts</b> read the mid a fixed interval <i>after</i> each fill — the only benchmark that looks forward, and the one that catches a venue picking you off. <b>Close</b> is the last print. The decision mid sits before arrival, and the gap between them is delay cost you own but didn't trade.</figcaption>
+    <figcaption>One parent buy, and where every benchmark reads the price. <b>Arrival</b> is the mid when the order reached the desk; slippage is the average fill against it. <b>Interval VWAP</b> is the tape over the fills' own window. <b>Markouts</b> read the mid a fixed interval <i>after</i> each fill — the only benchmark that looks forward, and the one that catches a venue picking you off. <b>Close</b> is the last print. The decision mid sits before arrival, and the gap between them is delay cost you own but didn't trade. The companion's <a href="https://rohanshiloh.github.io/order-trade-lifecycle/#fig-lifecycle">lifecycle timeline</a> shows the same order from the decision to settlement; this figure is its execution window, enlarged.</figcaption>
   </figure>
-
-  <div id="signed-bps" class="shard-note">
-    <div class="note-title">The Signed-bps Convention</div>
-    <p>Every benchmark in this stack returns basis points <b>signed so that positive is favourable to the order</b>: a buy that paid below the benchmark, a sell that sold above it. The whole sign lives in one helper, <code>buyorsell:{?[x="B";1f;-1f]}</code>, applied to the raw price difference. Fix it once and read every table the same way — green is good, red is cost — instead of re-deriving the sign per metric and getting markouts backwards at 4pm.</p>
-    <p>Bps are <code>1e4 * (price difference) % reference</code>. A markout of <code>-2.5</code> on a buy means the mid fell two and a half basis points against you in the window after your fill.</p>
-    <p>One documented exception: <code>.b.spreads</code> returns <b>effective</b>, <b>realised</b> and <b>impact</b> under the standard microstructure convention, where <b>positive = cost paid</b>. That is the sign every published paper uses for those three, so the library keeps it rather than quietly inverting the literature — the function carries a <code>NOTE</code> saying so. Everything else on this page is positive-is-favourable.</p>
-  </div>
 
   <div id="nbbo" class="shard-note">
     <div class="note-title">One Quote Is Not the NBBO</div>
@@ -685,7 +717,7 @@ mjx-container svg{max-width:100%}
 <!-- ───────────── THE SOURCE ───────────── -->
 <section class="part" id="source">
   <h2>The Source</h2>
-  <p class="lead">The whole stack is about 500 lines of q across ten <code>.q</code> files, on top of the KxSystems <code>kdb-tick</code> tickerplant. It lives at <a href="https://github.com/rohanshiloh/exec-tca-stack">github.com/rohanshiloh/exec-tca-stack</a>. The shape is one tickerplant fanning out four event streams, one engine that both the live CEP and the replay path load, and a benchmark library of pure functions that run the same way live or in batch. Expand any file to read it; each pane has its own copy button.</p>
+  <p class="lead">The whole stack is about 620 lines of q across ten <code>.q</code> files, on top of the KxSystems <code>kdb-tick</code> tickerplant. It lives at <a href="https://github.com/rohanshiloh/exec-tca-stack">github.com/rohanshiloh/exec-tca-stack</a>. The shape is one tickerplant fanning out four event streams, one engine that both the live CEP and the replay path load, and a benchmark library of pure functions that run the same way live or in batch. Expand any file to read it; each pane has its own copy button.</p>
   <p>Data flows left to right: <code>feed.q</code> publishes to the TP, which logs every message and fans it out to the RDB and to a chained TP; <code>tca.q</code> loads <code>engine.q</code> behind that chain and turns <code>bench.q</code> into prompt commands. <code>replay.q</code> and <code>rescue.q</code> work on the TP log off to the side; <code>lab.q</code> is the scratch driver; <code>beyond.q</code> adds the Beyond-Vanilla benchmarks and <code>dump.q</code> writes a diagnostics file. The one idea that keeps it small: <b>the measurement is the query</b>, so there is no separate analytics code — <code>bench.q</code> is the product.</p>
   <p>Clone the repository, then run <code>setup.sh</code> once. The stack uses the KX reference tickerplant unmodified but does not redistribute it, so the script fetches <code>tick.q</code>, <code>u.q</code>, <code>r.q</code> and <code>chainedtick.q</code> from KX's own repositories, links the schema where <code>tick.q</code> expects it, and makes the <code>log/</code> folder the tickerplant writes to.</p>
   <div class="code"><pre>mkdir -p ~/Code &amp;&amp; cd ~/Code
@@ -707,6 +739,7 @@ ln -sf ../sym.q tick/sym.q      # tick.q loads its schema from tick/
 rm -rf "$tmp"
 echo "ready: tick.q, tick/u.q, tick/r.q, tick/chainedtick.q, tick/sym.q -&gt; ../sym.q, log/"</pre></div>
   </details>
+  <button class="expandbtn" id="expandbtn" type="button">Expand all files</button>
   <div class="srcfiles">
     <details class="srcfile" id="src-warp">
       <summary><span class="fn">warp.yaml</span><span class="role">Warp launch config — start every tab at once</span><span class="lc">55 lines</span></summary>
@@ -992,7 +1025,7 @@ wheel:{ f:.b.wheelFeatures[parent;trade;execs;ord];
       </div>
     </details>
     <details class="srcfile" id="src-bench">
-      <summary><span class="fn">bench.q</span><span class="role">the TCA library (.b.*)</span><span class="lc">102 lines</span></summary>
+      <summary><span class="fn">bench.q</span><span class="role">the TCA library (.b.*)</span><span class="lc">104 lines</span></summary>
       <div class="body">
         <div class="desc">Pure functions, each taking the tables it needs explicitly: arrival/IS and shortfall, interval VWAP and TWAP, markouts, effective/realised spread, the venue scorecard, OFI, realised participation, the square-root pre-trade estimate, and the volume curve. Nothing here touches global state, so the same function runs inside the CEP and over a replayed HDB day.</div>
         <div class="code"><pre>/ exec-tca-stack : benchmark &amp; TCA library  (.b namespace, pure functions)
@@ -1002,13 +1035,13 @@ wheel:{ f:.b.wheelFeatures[parent;trade;execs;ord];
 / (a buy that paid below the benchmark, a sell that sold above it).
 
 \d .b
-buyorsell:{?[x="B"; 1f; -1f]};
+buyorsell:{?[x="B"; 1f; -1f]};            / +1 buy, -1 sell (not signum: side is a char)
 / A fill and its tape print are stamped by the tickerplant a moment apart, so a
 / tape window that ends exactly on the last fill would miss that fill's own print.
-tapeLag:0D00:00:00.050;                  / +1 buy, -1 sell (not signum: side is a char)
+tapeLag:0D00:00:00.050;
 
 / ── arrival price / implementation shortfall ────────────────────────────
-/ arrivalMid is stamped on the parent at the moment it arrived (see tca.q).
+/ arrivalMid is stamped on the parent at the moment it arrived (see engine.q).
 arrival:{[parent;execs]
   f:select averageFillPrice:(sum lastPx*lastQty)%sum lastQty, filled:sum lastQty
       by parentOrderID from execs where execType="F";
@@ -1023,7 +1056,7 @@ arrival:{[parent;execs]
 shortfall:{[parent;execs;decisionMid;endPx]
   a:update decisionMid:decisionMid, endPx:endPx from arrival[parent;execs];
   update delayBps:1e4*.b.buyorsell[side]*(decisionMid-arrivalMid)%decisionMid,
-         execBps :fillRate*1e4*.b.buyorsell[side]*(arrivalMid-averageFillPrice)%decisionMid,
+         execBps :?[fillRate&gt;0; fillRate*1e4*.b.buyorsell[side]*(arrivalMid-averageFillPrice)%decisionMid; 0f],
          oppBps  :(1-fillRate)*1e4*.b.buyorsell[side]*(arrivalMid-endPx)%decisionMid
     from a };
 
@@ -1032,13 +1065,14 @@ shortfall:{[parent;execs;decisionMid;endPx]
 ivwap:{[parent;trade;execs]
   sp:0!select startTime:min time, endTime:max time, averageFillPrice:(sum lastPx*lastQty)%sum lastQty
        by parentOrderID, sym, side from execs where execType="F";
-  f:{[t;sy;s;e] v:t where (t`sym)=sy; v@:where v[`time] within (s;e+.b.tapeLag);
+  / `where sym=sy` uses the g# index on sym; a vector scan of the column would not
+  f:{[t;sy;s;e] v:select px,size from t where sym=sy, time within (s;e+.b.tapeLag);
        $[count v; (v`size) wavg v`px; 0n]}[trade];
   vw:f'[sp`sym; sp`startTime; sp`endTime];
   update vwap:vw, slipBps:1e4*.b.buyorsell[side]*(vw-averageFillPrice)%vw from sp };
 
 / TWAP: mean mid over the same window (equal 100ms spacing ≈ time-weighted).
-twap:{[quote;sy;s;e] q:quote where (quote`sym)=sy; q@:where q[`time] within (s;e);
+twap:{[quote;sy;s;e] q:select bid,ask from quote where sym=sy, time within (s;e);
   $[count q; avg 0.5*q[`bid]+q`ask; 0n] };
 
 / ── markouts ─────────────────────────────────────────────────────────────
@@ -1063,8 +1097,9 @@ scorecard:{[mk] 0!select numberOfFills:count i, shares:sum lastQty, averageBps:a
 / PAID — the opposite of arrival/markout above, where positive = favourable.
 spreads:{[execs;quote;h]
   f:select time,sym,side,lastPx,lastQty,venue from execs where execType="F";
-  a0:aj[`sym`time; f; quote];
-  ah:aj[`sym`time; update time:time+h from f; quote];
+  qt:select time,sym,bid,ask from quote;          / only what the join needs
+  a0:aj[`sym`time; f; qt];
+  ah:aj[`sym`time; update time:time+h from f; qt];
   mid0:0.5*a0[`bid]+a0`ask;                      / bracket form: `bid+`ask would be a type error
   midh:0.5*ah[`bid]+ah`ask;
   r:update effectiveBps :1e4*2*.b.buyorsell[side]*(lastPx-mid0)%lastPx,
@@ -1085,7 +1120,7 @@ ofi:{[quote;w]
 / realised participation: executed shares / tape volume in the parent's window.
 participation:{[parent;trade;execs]
   sp:0!select startTime:min time, endTime:max time, executedQty:sum lastQty by parentOrderID, sym from execs where execType="F";
-  f:{[t;sy;s;e] sum (t where (t`sym)=sy)[`size] where (t where (t`sym)=sy)[`time] within (s;e+.b.tapeLag)}[trade];
+  f:{[t;sy;s;e] exec sum size from t where sym=sy, time within (s;e+.b.tapeLag)}[trade];
   update pov:executedQty%0f+f'[sp`sym;sp`startTime;sp`endTime] from sp };
 
 / square-root pre-trade cost estimate (bps): cost = C · sigma · sqrt(Q/ADV).
@@ -1100,7 +1135,7 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
       </div>
     </details>
     <details class="srcfile" id="src-beyond">
-      <summary><span class="fn">beyond.q</span><span class="role">beyond-vanilla benchmarks — the F labs</span><span class="lc">120 lines</span></summary>
+      <summary><span class="fn">beyond.q</span><span class="role">beyond-vanilla benchmarks — the F labs</span><span class="lc">121 lines</span></summary>
       <div class="body">
         <div class="desc">Robust arrival, fee-aware cost, the marketable/limited split, the PWP range, point-in-time bands, execution versus market, and percentile scoring. Defined from the root with explicit <code>.b.</code> names, because KDB-X does not fall back to the root for reads made inside a namespace.</div>
         <div class="code"><pre>/ exec-tca-stack : beyond-vanilla TCA  (the F labs; extends the .b namespace)
@@ -1111,7 +1146,7 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
 / ── F1 robust arrival ────────────────────────────────────────────────────
 / median mid over [arrivalTime; arrivalTime+w], not a single snapshot
 .b.robustArrival:{[parent;quote;w]
-  g:{[q;sy;t;w] m:q where (q`sym)=sy; m@:where m[`time] within (t;t+w);
+  g:{[q;sy;t;w] m:select bid,ask from q where sym=sy, time within (t;t+w);
        $[count m; med 0.5*m[`bid]+m`ask; 0n]}[quote];
   p:0!parent;
   update arrivalMidRobust:g'[p`sym;p`arrivalTime;w] from p };
@@ -1136,7 +1171,7 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
 / ── F3 marketable vs limited ─────────────────────────────────────────────
 / VWAP over only the prints a limit order could have traded against
 .b.limVwap:{[trade;sy;startTime;endTime;side;lim]
-  v:trade where (trade`sym)=sy; v@:where v[`time] within (startTime;endTime);
+  v:select px,size from trade where sym=sy, time within (startTime;endTime);
   v@:where $[side="B"; v[`px]&lt;=lim; v[`px]&gt;=lim];   / in-limit only
   $[count v; (v`size) wavg v`px; 0n] };
 
@@ -1189,8 +1224,9 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
   w:select startTime:min time, endTime:max time by parentOrderID
       from execs where execType="F";
   a:a lj w;
-  mv:{[q;sy;startTime;endTime] b:q where (q`sym)=sy; m:0.5*b[`bid]+b`ask;
-       m0:last m where b[`time]&lt;=startTime; m1:last m where b[`time]&lt;=endTime;
+  mv:{[q;sy;startTime;endTime]
+       m0:exec last 0.5*bid+ask from q where sym=sy, time&lt;=startTime;
+       m1:exec last 0.5*bid+ask from q where sym=sy, time&lt;=endTime;
        1e4*(m1-m0)%m0}[quote];
   mk:mv'[a`sym;a`startTime;a`endTime];
   update mktBps:neg .b.buyorsell[side]*mk,
@@ -1317,7 +1353,7 @@ bps:{ 0.01*floor 0.5+100*x };                 / round to 2dp for the eye
       </div>
     </details>
     <details class="srcfile" id="src-dump">
-      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">118 lines</span></summary>
+      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">117 lines</span></summary>
       <div class="body">
         <div class="desc"><code>\l dump.q</code> then <code>tcaDump[]</code> in the TCA tab runs every benchmark and writes the output to <code>tcaData.txt</code>. Each query is trapped, so one failure prints its error and the rest still run. The outputs in this document came from it.</div>
         <div class="code"><pre>/ exec-tca-stack : write TCA diagnostics to tcaData.txt
@@ -1348,7 +1384,6 @@ tcaQueries:(
   "select pctFilled:filledQty%qty, vwapFill:notional%filledQty by parentOrderID from 5#0!parent";
   "select wAvg:fillRate wavg slipBps from arrival[]";
   "select averageBps:avg bps by horizon from markouts[]";
-  "select averageBps:avg bps, medBps:med bps, clampedBps:avg -25f|25f&amp;bps, n:count i by venue from markouts[]";
   "select effectiveBps:avg effectiveBps, impact:avg impact by venue from spreads[]";
   "select averageBps:avg bps, n:count i by liq, horizon from markouts[]";
   "select n:count i, avgSlip:avg slipBps, avgFillRate:avg fillRate, unfinished:sum fillRate&lt;1 by cohort from cohorts[]";
@@ -1377,9 +1412,9 @@ tcaQueries:(
   "select averageBps:avg bps, medBps:med bps, clampedBps:avg .b.winsor[bps;-25f;25f], n:count i by venue from markouts[]";
   "\\t do[20; scorecard[]]";
   "tcaLog[]";
-  "system \"head -c 5000000 \",tcaLog[],\" &gt; /tmp/exec-tca-cut.log\"";
-  "system \"q rescue.q /tmp/exec-tca-cut.log -q &lt;/dev/null 2&gt;&amp;1\"";
-  "system \"q replay.q /tmp/exec-tca-cut.log -q &lt;/dev/null 2&gt;&amp;1\"";
+  "{f:hsym `$tcaLog[]; (hsym `$\"/tmp/exec-tca-cut.log\") 1: read1 (f; 0; 5000000&amp;hcount f)}[]";
+  "system \"sh -c 'q rescue.q /tmp/exec-tca-cut.log -q &lt;/dev/null 2&gt;&amp;1; true'\"";
+  "system \"sh -c 'q replay.q /tmp/exec-tca-cut.log -q &lt;/dev/null 2&gt;&amp;1; true'\"";
   "rq[5010;\"`date`messages`log!(.u.d;.u.i;.u.L)\"]";
   "rq[5010;\"count each .u.w\"]";
   "rq[5013;\"count each .u.w\"]";
@@ -1391,7 +1426,7 @@ tcaQueries:(
 / run a query on another process by port, over a short-lived handle
 rq:{[port;qry] h:hopen port; r:@[h;qry;{`$"remote error: ",x}]; hclose h; r };
 / the working directory of another process
-procDir:{[port] first rq[port;"system\"cd\""] };
+procDir:{[port] r:rq[port;"system\"cd\""]; $[10h=type r; r; first r] };
 
 / newest tickerplant log under log/
 tcaLog:{ f:key `:log; f:f where f like "sym2*"; "log/",string last asc f };
@@ -1632,7 +1667,7 @@ q)\\          <span class="c">/ or just exit</span></pre></div>
       <tr><td>\(P_{\text{arr}}\)</td><td>mid when the order arrived at the desk</td><td><code>arrivalMid</code></td></tr>
       <tr><td>\(P_{\text{dec}}\)</td><td>mid at the decision, before arrival</td><td><code>decisionMid</code></td></tr>
       <tr><td>\(P_{\text{end}}\)</td><td>reference price at the end of the window</td><td><code>endPx</code></td></tr>
-      <tr><td>\(M_t,\;M_{t+h}\)</td><td>mid at the fill, and h later</td><td><code>0.5*bid+ask</code> via <code>aj</code></td></tr>
+      <tr><td>\(M_t,\;M_{t+h}\)</td><td>mid at the fill, and h later</td><td><code>0.5*(bid+ask)</code> via <code>aj</code></td></tr>
       <tr><td>\(\bar M\)</td><td>average mid over the fills</td><td>—</td></tr>
       <tr><td>\(f\)</td><td>fill rate: executed ÷ ordered</td><td><code>fillRate</code></td></tr>
       <tr><td>\(h\)</td><td>markout horizon</td><td><code>HORIZONS</code></td></tr>
@@ -1663,10 +1698,11 @@ q)\\          <span class="c">/ or just exit</span></pre></div>
       <div class="code"><pre>1e4*C*sigma*sqrt Q%ADV</pre></div></div>
     <div class="fxrow"><div class="lbl">order-flow imbalance at the touch</div>
       <div class="eq">\[ \text{OFI} \;=\; \sum \Delta q^{\,b} \;-\; \sum \Delta q^{\,a} \]</div>
-      <div class="code"><pre>(sum dB)-sum dA</pre></div></div>
+      <div class="code"><pre>(sum db)-sum da          <span class="c">/ db, da: per-venue sums of 1_deltas bsize, asize</span></pre></div></div>
     <div class="fxrow"><div class="lbl">PWP range — where the fill landed (0 best, 1 worst)</div>
       <div class="eq">\[ \ell \;=\; \frac{\bar P_{\text{fill}}-P_{\text{best}}}{P_{\text{worst}}-P_{\text{best}}} \]</div>
-      <div class="code"><pre>(averageFillPrice-r`best)%(r`worst)-r`best</pre></div></div>
+      <div class="code"><pre>?[side="B"; (averageFillPrice-cheapest)%dearest-cheapest;
+            (dearest-averageFillPrice)%dearest-cheapest]</pre></div></div>
   </div>
 
   <div class="shard-note" id="pit">
@@ -1760,7 +1796,7 @@ arrival:{[parent;execs]
       by parentOrderID from execs where execType="F";
   p:0!(parent lj f);
   update slipBps:1e4*.b.buyorsell[side]*(arrivalMid-averageFillPrice)%arrivalMid,
-         fillRate:filled%qty from p };</pre></div>
+         fillRate:(0^filled)%qty from p };</pre></div>
       <div class="code"><pre>q)select parentOrderID,sym,side,fillRate,slipBps from arrival[]
 parentOrderID sym  side fillRate slipBps
 -------------------------------------------
@@ -1785,12 +1821,12 @@ q)select wAvg:fillRate wavg slipBps from arrival[]   <span class="c">/ book-leve
     <div class="cmds">
       <div class="code"><pre><span class="c">/ bench.q — interval VWAP over each parent's own window</span>
 ivwap:{[parent;trade;execs]
-  sp:0!select s:min time, e:max time,
-       averageFillPrice:(sum lastPx*lastQty)%sum lastQty
+  sp:0!select startTime:min time, endTime:max time, averageFillPrice:(sum lastPx*lastQty)%sum lastQty
        by parentOrderID, sym, side from execs where execType="F";
-  f:{[t;sy;s;e] v:t where (t`sym)=sy; v@:where v[`time] within (s;e);
+  / `where sym=sy` uses the g# index on sym; a vector scan of the column would not
+  f:{[t;sy;s;e] v:select px,size from t where sym=sy, time within (s;e+.b.tapeLag);
        $[count v; (v`size) wavg v`px; 0n]}[trade];
-  vw:f'[sp`sym; sp`s; sp`e];
+  vw:f'[sp`sym; sp`startTime; sp`endTime];
   update vwap:vw, slipBps:1e4*.b.buyorsell[side]*(vw-averageFillPrice)%vw from sp };</pre></div>
       <div class="code"><pre>q)select parentOrderID,sym,vwap,averageFillPrice,slipBps from vwap[]
 parentOrderID sym  vwap     averageFillPrice slipBps
@@ -1820,11 +1856,11 @@ q).b.closePx[trade]              <span class="c">/ the close benchmark, per sym<
     <div class="cmds">
       <div class="code"><pre><span class="c">/ bench.q — markouts: same aj, shifted horizons; +bps = our way</span>
 markout:{[execs;quote;horizons]
-  f:select time,sym,side,lastPx,lastQty,venue
-      from execs where execType="F";
-  mo:{[quote;f;h] m:aj[`sym`time; update time:time+h from f; quote];
-      update horizon:h,
-        bps:1e4*.b.buyorsell[side]*((0.5*bid+ask)-lastPx)%lastPx from m
+  f:select time,sym,side,lastPx,lastQty,venue,liq from execs where execType="F";
+  / join only bid/ask: quote has its own `venue` column, which would otherwise
+  / overwrite the fill's venue and collapse the scorecard onto one venue.
+  mo:{[quote;f;h] m:aj[`sym`time; update time:time+h from f; select time,sym,bid,ask from quote];
+      update horizon:h, bps:1e4*.b.buyorsell[side]*((0.5*bid+ask)-lastPx)%lastPx from m
      }[quote;f];
   raze mo each horizons };</pre></div>
       <div class="code"><pre>q)select averageBps:avg bps by horizon from markouts[]
@@ -1874,6 +1910,15 @@ horizon             | averageBps
     </figure>
   </div>
 
+  <div id="reading-markouts" class="shard-note">
+    <div class="note-title">Reading a Markout Curve</div>
+    <p>Computing a markout is one join. Reading one takes more care, and there are four things to look at, in this order.</p>
+    <p><b>The level at the shortest horizon.</b> This is what the fill cost you before anything else happened. A taker starts about half a spread down, because it paid to cross; a resting order starts about half a spread up, because it was paid to wait. In the live run the taker fills sit at −0.52 bps after one second and the passive fills at +0.24. Compare venues within the same kind of fill, or the mix of making and taking will pass for venue quality.</p>
+    <p><b>The slope from one horizon to the next.</b> A curve that drops and then goes flat was a one-off: someone was faster, the damage is done, and it does not grow. EDGX in the live scorecard is −0.61, −0.61, −0.59. A curve that starts near zero and keeps falling is information arriving after you traded: BATS runs −0.01, −0.20, −0.43. The first is a latency problem and the second a routing problem, and one blended number cannot tell them apart.</p>
+    <p><b>The sign at the longest horizon.</b> Positive and rising means the market kept moving your way after you traded, which usually reflects your own remaining order still pushing the price. Negative means you would have done better by waiting. Near zero means you paid the spread and nothing else.</p>
+    <p><b>The number of fills behind each point.</b> A sixty-second markout is noisy: over ten minutes of this feed it moved by a few tenths of a basis point between runs, and settled only at thirty. Put the count beside every average, and prefer the median when the two disagree.</p>
+  </div>
+
   <!-- C2 -->
   <div class="lab" id="lab-c2"><a id="scorecard" style="position:absolute" aria-hidden="true"></a>
     <div class="notes">
@@ -1885,11 +1930,11 @@ horizon             | averageBps
     <div class="cmds">
       <div class="code"><pre><span class="c">/ bench.q — effective / realised spread and impact</span>
 spreads:{[execs;quote;h]
-  f:select time,sym,side,lastPx,lastQty,venue
-      from execs where execType="F";
-  a0:aj[`sym`time; f; quote];
-  ah:aj[`sym`time; update time:time+h from f; quote];
-  mid0:0.5*a0[`bid]+a0`ask;        <span class="c">/ bracket form: `bid+`ask is a type error</span>
+  f:select time,sym,side,lastPx,lastQty,venue from execs where execType="F";
+  qt:select time,sym,bid,ask from quote;          / only what the join needs
+  a0:aj[`sym`time; f; qt];
+  ah:aj[`sym`time; update time:time+h from f; qt];
+  mid0:0.5*a0[`bid]+a0`ask;                      / bracket form: `bid+`ask would be a type error
   midh:0.5*ah[`bid]+ah`ask;
   r:update effectiveBps :1e4*2*.b.buyorsell[side]*(lastPx-mid0)%lastPx,
            realisedBps:1e4*2*.b.buyorsell[side]*(lastPx-midh)%lastPx from f;
@@ -1920,10 +1965,19 @@ q)select effectiveBps:avg effectiveBps, impact:avg impact by venue from spreads[
     </div>
   </div>
 
+  <div id="toxicity" class="shard-note">
+    <div class="note-title">Why the Toxic Venue Fills You First</div>
+    <p>A fill needs someone on the other side, and the question a scorecard exists to answer is who that was. On a venue where the other side is mostly slow, uninformed flow, your resting order waits its turn and fills at a price that stays fair. On a venue where the other side is fast or informed, your order fills at the moment it becomes a bad price: just before the quote moves through it. From the inside those look the same, except that the second kind fills sooner and more often.</p>
+    <p>That is why <b>fill rate is a dangerous way to rank venues</b>. Availability and quality pull in opposite directions: the venue most willing to trade with you right now is disproportionately the one whose counterparties know something you do not. Rank on fill rate and you route more flow to exactly the place that costs you most.</p>
+    <p>It is also what <b>rebates</b> are for. A venue pays you to rest an order because resting is a risk: you are offering a free option to anyone faster than you. The rebate is the premium for writing that option, set by a venue that knows how often it gets exercised. In the fee lab (<a href="#lab-f2">F2</a>), BATS pays the best rebate on the street, 0.25 bps, and its one-minute markout hands back 0.24.</p>
+    <p>So read the scorecard as a row. Fill rate says how available a venue is, the short markout how fast its counterparties are, the long markout how informed they are, and the fee line what you were paid to find out.</p>
+  </div>
+
   <!-- C3 -->
   <div class="lab" id="lab-c3"><a id="ofi" style="position:absolute" aria-hidden="true"></a>
     <div class="notes">
       <h3><span class="n">C3</span>Book State &amp; OFI at Placement</h3>
+      <p class="companion">Companion · <a href="https://rohanshiloh.github.io/order-trade-lifecycle/">The Order &amp; Trade Lifecycle</a>: <a href="https://rohanshiloh.github.io/order-trade-lifecycle/#routing">the routing problem</a>: why what the router saw cannot be rebuilt afterwards.</p>
       <div class="where">Run in <span class="tag tsh">TCA</span></div>
       <p>The book at placement — spread, depth at the touch, queue-ahead, and order-flow imbalance — belongs on the order record, stamped when the child is placed. OFI is the signed net change in depth at the touch over a trailing window: pressure, in one line.</p>
       <p class="warn">This is a <b>touch-level</b> OFI, which is enough to illustrate pressure and to use as a regressor in the wheel. Production OFI also accounts for quote-<i>price</i> movement (depth at a new price level is not the same as depth added at the old one), queue replenishment, and depth migrating between levels. Cont, Kukanov &amp; Stoikov's formulation is the usual starting point; treat the one-liner here as its degenerate case.</p>
@@ -1931,21 +1985,9 @@ q)select effectiveBps:avg effectiveBps, impact:avg impact by venue from spreads[
     <div class="cmds">
       <div class="code"><pre><span class="c">/ bench.q — OFI: signed net depth change at the touch</span>
 ofi:{[quote;w]
-  v:select db:sum 1_deltas bsize, da:sum 1_deltas asize   <span class="c">/ per VENUE first</span>
-    by sym, venue from quote where time>(max time)-w;     <span class="c">/ 1_ drops the level</span>
-  0!select ofi:(sum db)-sum da by sym from v };
-
-q)ofi[]                       <span class="c">/ 5-second window, live: .z.n-w</span>
-sym   ofi
-----------
-AAPL  0
-AMZN  1100
-GOOGL 1400
-JPM   -700   <span class="c">/ depth leaving the bid → downward pressure</span>
-META  -700
-MSFT  -300
-NVDA  2200
-TSLA  2100</pre></div>
+  v:select db:sum 1_deltas bsize, da:sum 1_deltas asize
+    by sym, venue from quote where time&gt;(max time)-w;
+  0!select ofi:(sum db)-sum da by sym from v };</pre></div>
       <div class="code"><pre><span class="c">/ book state stamped onto each placement (schema sketch)</span>
 place:([] time:`timespan$(); sym:`$(); childOrderID:`$(); venue:`$();
   side:`char$(); qty:`long$(); px:`float$();
@@ -1968,17 +2010,13 @@ place:([] time:`timespan$(); sym:`$(); childOrderID:`$(); venue:`$();
       <p class="warn">Participation drift — creeping above target when volume thins — is where VWAP orders quietly become impact. Watch POV against the curve, not against the clock.</p>
     </div>
     <div class="cmds">
-      <div class="code"><pre><span class="c">/ bench.q — 5-minute volume buckets (the U)</span>
-volcurve:{[trade] 0!select vol:sum size
-  by bar:00:05:00 xbar time from trade };
+      <div class="code"><pre><span class="c">/ bench.q — 5-minute volume buckets (the U), and realised participation</span>
+volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade };
 
-<span class="c">/ realised participation per parent</span>
 participation:{[parent;trade;execs]
-  sp:0!select s:min time, e:max time, executedQty:sum lastQty
-       by parentOrderID, sym from execs where execType="F";
-  f:{[t;sy;s;e] sum (t where (t`sym)=sy)[`size]
-       where (t where (t`sym)=sy)[`time] within (s;e)}[trade];
-  update pov:executedQty%0f+f'[sp`sym;sp`s;sp`e] from sp };</pre></div>
+  sp:0!select startTime:min time, endTime:max time, executedQty:sum lastQty by parentOrderID, sym from execs where execType="F";
+  f:{[t;sy;s;e] exec sum size from t where sym=sy, time within (s;e+.b.tapeLag)}[trade];
+  update pov:executedQty%0f+f'[sp`sym;sp`startTime;sp`endTime] from sp };</pre></div>
       <div class="code"><pre>q)select parentOrderID,sym,executedQty,pov from pov[]
 parentOrderID sym  executedQty pov
 ----------------------------------------
@@ -2101,6 +2139,59 @@ replaying :sym2026.11.12 through the engine …
 ── arrival slippage (bps, + = favourable) ──
 parentOrderID sym  side qty   fillRate slipBps
 ...</pre></div>
+    </div>
+  </div>
+  <!-- E4 -->
+  <div class="lab" id="lab-e4"><a id="end-of-day" style="position:absolute" aria-hidden="true"></a>
+    <div class="notes">
+      <h3><span class="n">E4</span>Force an End of Day</h3>
+      <div class="where">Run in <span class="tag tsh">TCA</span></div>
+      <p>End of day is one message. The tickerplant tells every subscriber the day is over; the RDB writes its tables to disk as a date partition and empties itself; the HDB reloads and can serve the day; the tickerplant moves to the next date and a new log. <code>tcaEod[]</code> in <code>dump.q</code> triggers it from the TCA prompt over handles to the other three processes, then checks each one.</p>
+      <p>The directory matters. <code>r.q</code> changes into <code>log/sym</code> after replaying the log and writes the partition there, then tells the HDB to reload <i>its own</i> directory. So the HDB has to be started in that same place, as <code>q log/sym -p 5012</code>. <code>tcaEod[]</code> checks both before it does anything.</p>
+      <p class="warn">Every call moves the tickerplant's date forward by one day, and the engine clears its intraday state when the message arrives. Restart the stack afterwards to return to today.</p>
+    </div>
+    <div class="cmds">
+      <div class="code"><pre><span class="c">/ dump.q — a query on another process, over a short-lived handle</span>
+rq:{[port;qry] h:hopen port; r:@[h;qry;{`$"remote error: ",x}]; hclose h; r };
+
+q)\l dump.q
+q)tcaEod[]
+wrote ~/Code/exec-tca-stack/tcaEod.txt
+q)end of day 2026.11.16: intraday state cleared    <span class="c">/ the engine, told by the chained TP</span></pre></div>
+      <div class="code"><pre><span class="c">/ the RDB before, and after it has written the day down</span>
+q)rq[5011;"tables[]!count each value each tables[]"]
+execs| 1118657
+ord  | 17418
+quote| 7037440
+trade| 5135284
+q)rq[5010;".u.endofday[]"]
+q)rq[5011;"tables[]!count each value each tables[]"]
+execs| 12             <span class="c">/ only what arrived since</span>
+ord  | 0
+quote| 128
+trade| 91
+
+<span class="c">/ the tickerplant has rolled</span>
+q)rq[5010;"`date`log!(.u.d;.u.L)"]
+date| 2026.11.17
+log | `:./log/sym2026.11.17
+
+<span class="c">/ and the HDB now serves the day, partitioned by date, parted on sym</span>
+q)rq[5012;"select n:count i by date from execs"]
+date      | n
+----------| -------
+2026.11.16| 1118657
+q)rq[5012;"select n:count i, shares:sum lastQty by date, venue from execs"]
+date       venue| n      shares
+----------------| ---------------
+2026.11.16 ARCA | 140678 43039800
+2026.11.16 BATS | 280051 85570600
+2026.11.16 EDGX | 278959 85258700
+2026.11.16 INTL | 139657 42768600
+2026.11.16 MLIT | 139484 42579500
+2026.11.16 NSDQ | 139828 42859700
+q)key `:log/sym
+`s#`2026.11.16`sym</pre></div>
     </div>
   </div>
 </section>
@@ -2545,6 +2636,7 @@ darkShare    -2.981946
   </div>
   <div id="pr-writedown" class="shard-note">
     <div class="note-title">Writing the Day Down</div>
+    <p class="companion">Companion · <a href="https://rohanshiloh.github.io/order-trade-lifecycle/">The Order &amp; Trade Lifecycle</a>: <a href="https://rohanshiloh.github.io/order-trade-lifecycle/#post-trade">post-trade</a>: where these fills go next, into clearing, settlement and the audit trail.</p>
     <p>The exec HDB is a compliance artifact, not just a TCA cache: partition by date, keep <code>sym</code> and <code>parentOrderID</code> as the natural query keys, and compress the closed partitions — exec and quote compress well and the read penalty on a date-sym slice is small. The end-of-day write is the standard <code>.Q.hdpf</code> hand-off; nothing in this stack's analytics changes, because they already run over whatever <code>execs</code> and <code>quote</code> contain, live or on disk.</p>
   </div>
 </section>
@@ -2597,13 +2689,26 @@ darkShare    -2.981946
 </section>
 
 <footer>
-  <span class="ok">exec-tca-stack</span> — a complete execution-analysis tick stack in ~400 lines of q. Equities, regular hours, signed bps. Companion to <i>The Order &amp; Trade Lifecycle</i>: that doc is how an intention becomes a settled trade; this one is what the fill cost once it did.
+  <span class="ok">exec-tca-stack</span> — a complete execution-analysis tick stack in about 620 lines of q. Equities, regular hours, signed bps. Companion to <i>The Order &amp; Trade Lifecycle</i>: that doc is how an intention becomes a settled trade; this one is what the fill cost once it did.
 </footer>
 </div>
+<a class="totop" href="#contents">↑ Contents</a>
 <script>
 window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]},options:{skipHtmlTags:['script','style','textarea','pre','code']},svg:{fontCache:'global'}};
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js" defer></script>
+<script>
+(function(){
+  var root=document.documentElement, btn=document.getElementById('themebtn'), order=['auto','light','dark'];
+  function get(){try{return localStorage.getItem('aof-theme')||'auto'}catch(e){return 'auto'}}
+  function apply(t){ if(t==='auto'){root.removeAttribute('data-theme')}else{root.setAttribute('data-theme',t)} if(btn)btn.textContent='Theme: '+t; }
+  var cur=get(); if(cur!=='auto')apply(cur);
+  if(btn)btn.addEventListener('click',function(){cur=order[(order.indexOf(cur)+1)%3];apply(cur);try{localStorage.setItem('aof-theme',cur)}catch(e){}});
+  var eb=document.getElementById('expandbtn');
+  if(eb)eb.addEventListener('click',function(){var d=document.querySelectorAll('details.srcfile'),open=eb.textContent.indexOf('Expand')===0;
+    for(var i=0;i<d.length;i++)d[i].open=open; eb.textContent=open?'Collapse all files':'Expand all files';});
+})();
+</script>
 <script>
 document.documentElement.lang='en';
 document.querySelectorAll('.code').forEach(function(box){

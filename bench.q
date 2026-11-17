@@ -5,13 +5,13 @@
 / (a buy that paid below the benchmark, a sell that sold above it).
 
 \d .b
-buyorsell:{?[x="B"; 1f; -1f]};
+buyorsell:{?[x="B"; 1f; -1f]};            / +1 buy, -1 sell (not signum: side is a char)
 / A fill and its tape print are stamped by the tickerplant a moment apart, so a
 / tape window that ends exactly on the last fill would miss that fill's own print.
-tapeLag:0D00:00:00.050;                  / +1 buy, -1 sell (not signum: side is a char)
+tapeLag:0D00:00:00.050;
 
 / ── arrival price / implementation shortfall ────────────────────────────
-/ arrivalMid is stamped on the parent at the moment it arrived (see tca.q).
+/ arrivalMid is stamped on the parent at the moment it arrived (see engine.q).
 arrival:{[parent;execs]
   f:select averageFillPrice:(sum lastPx*lastQty)%sum lastQty, filled:sum lastQty
       by parentOrderID from execs where execType="F";
@@ -26,7 +26,7 @@ arrival:{[parent;execs]
 shortfall:{[parent;execs;decisionMid;endPx]
   a:update decisionMid:decisionMid, endPx:endPx from arrival[parent;execs];
   update delayBps:1e4*.b.buyorsell[side]*(decisionMid-arrivalMid)%decisionMid,
-         execBps :fillRate*1e4*.b.buyorsell[side]*(arrivalMid-averageFillPrice)%decisionMid,
+         execBps :?[fillRate>0; fillRate*1e4*.b.buyorsell[side]*(arrivalMid-averageFillPrice)%decisionMid; 0f],
          oppBps  :(1-fillRate)*1e4*.b.buyorsell[side]*(arrivalMid-endPx)%decisionMid
     from a };
 
@@ -35,13 +35,14 @@ shortfall:{[parent;execs;decisionMid;endPx]
 ivwap:{[parent;trade;execs]
   sp:0!select startTime:min time, endTime:max time, averageFillPrice:(sum lastPx*lastQty)%sum lastQty
        by parentOrderID, sym, side from execs where execType="F";
-  f:{[t;sy;s;e] v:t where (t`sym)=sy; v@:where v[`time] within (s;e+.b.tapeLag);
+  / `where sym=sy` uses the g# index on sym; a vector scan of the column would not
+  f:{[t;sy;s;e] v:select px,size from t where sym=sy, time within (s;e+.b.tapeLag);
        $[count v; (v`size) wavg v`px; 0n]}[trade];
   vw:f'[sp`sym; sp`startTime; sp`endTime];
   update vwap:vw, slipBps:1e4*.b.buyorsell[side]*(vw-averageFillPrice)%vw from sp };
 
 / TWAP: mean mid over the same window (equal 100ms spacing ≈ time-weighted).
-twap:{[quote;sy;s;e] q:quote where (quote`sym)=sy; q@:where q[`time] within (s;e);
+twap:{[quote;sy;s;e] q:select bid,ask from quote where sym=sy, time within (s;e);
   $[count q; avg 0.5*q[`bid]+q`ask; 0n] };
 
 / ── markouts ─────────────────────────────────────────────────────────────
@@ -66,8 +67,9 @@ scorecard:{[mk] 0!select numberOfFills:count i, shares:sum lastQty, averageBps:a
 / PAID — the opposite of arrival/markout above, where positive = favourable.
 spreads:{[execs;quote;h]
   f:select time,sym,side,lastPx,lastQty,venue from execs where execType="F";
-  a0:aj[`sym`time; f; quote];
-  ah:aj[`sym`time; update time:time+h from f; quote];
+  qt:select time,sym,bid,ask from quote;          / only what the join needs
+  a0:aj[`sym`time; f; qt];
+  ah:aj[`sym`time; update time:time+h from f; qt];
   mid0:0.5*a0[`bid]+a0`ask;                      / bracket form: `bid+`ask would be a type error
   midh:0.5*ah[`bid]+ah`ask;
   r:update effectiveBps :1e4*2*.b.buyorsell[side]*(lastPx-mid0)%lastPx,
@@ -88,7 +90,7 @@ ofi:{[quote;w]
 / realised participation: executed shares / tape volume in the parent's window.
 participation:{[parent;trade;execs]
   sp:0!select startTime:min time, endTime:max time, executedQty:sum lastQty by parentOrderID, sym from execs where execType="F";
-  f:{[t;sy;s;e] sum (t where (t`sym)=sy)[`size] where (t where (t`sym)=sy)[`time] within (s;e+.b.tapeLag)}[trade];
+  f:{[t;sy;s;e] exec sum size from t where sym=sy, time within (s;e+.b.tapeLag)}[trade];
   update pov:executedQty%0f+f'[sp`sym;sp`startTime;sp`endTime] from sp };
 
 / square-root pre-trade cost estimate (bps): cost = C · sigma · sqrt(Q/ADV).

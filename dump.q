@@ -26,7 +26,6 @@ tcaQueries:(
   "select pctFilled:filledQty%qty, vwapFill:notional%filledQty by parentOrderID from 5#0!parent";
   "select wAvg:fillRate wavg slipBps from arrival[]";
   "select averageBps:avg bps by horizon from markouts[]";
-  "select averageBps:avg bps, medBps:med bps, clampedBps:avg -25f|25f&bps, n:count i by venue from markouts[]";
   "select effectiveBps:avg effectiveBps, impact:avg impact by venue from spreads[]";
   "select averageBps:avg bps, n:count i by liq, horizon from markouts[]";
   "select n:count i, avgSlip:avg slipBps, avgFillRate:avg fillRate, unfinished:sum fillRate<1 by cohort from cohorts[]";
@@ -55,9 +54,9 @@ tcaQueries:(
   "select averageBps:avg bps, medBps:med bps, clampedBps:avg .b.winsor[bps;-25f;25f], n:count i by venue from markouts[]";
   "\\t do[20; scorecard[]]";
   "tcaLog[]";
-  "system \"head -c 5000000 \",tcaLog[],\" > /tmp/exec-tca-cut.log\"";
-  "system \"q rescue.q /tmp/exec-tca-cut.log -q </dev/null 2>&1\"";
-  "system \"q replay.q /tmp/exec-tca-cut.log -q </dev/null 2>&1\"";
+  "{f:hsym `$tcaLog[]; (hsym `$\"/tmp/exec-tca-cut.log\") 1: read1 (f; 0; 5000000&hcount f)}[]";
+  "system \"sh -c 'q rescue.q /tmp/exec-tca-cut.log -q </dev/null 2>&1; true'\"";
+  "system \"sh -c 'q replay.q /tmp/exec-tca-cut.log -q </dev/null 2>&1; true'\"";
   "rq[5010;\"`date`messages`log!(.u.d;.u.i;.u.L)\"]";
   "rq[5010;\"count each .u.w\"]";
   "rq[5013;\"count each .u.w\"]";
@@ -69,7 +68,7 @@ tcaQueries:(
 / run a query on another process by port, over a short-lived handle
 rq:{[port;qry] h:hopen port; r:@[h;qry;{`$"remote error: ",x}]; hclose h; r };
 / the working directory of another process
-procDir:{[port] first rq[port;"system\"cd\""] };
+procDir:{[port] r:rq[port;"system\"cd\""]; $[10h=type r; r; first r] };
 
 / newest tickerplant log under log/
 tcaLog:{ f:key `:log; f:f where f like "sym2*"; "log/",string last asc f };

@@ -224,4 +224,5 @@ tick.q
 tick/
 log/
 tcaData.txt
+tcaEod.txt
 *.bak*
