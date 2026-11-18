@@ -2307,43 +2307,43 @@ wrote ~/Code/exec-tca-stack/tcaEod.txt
 q)end of day 2026.11.18: intraday state cleared    <span class="c">/ the engine, told by the chained TP</span></pre></div>
       <div class="code"><pre><span class="c">/ the RDB before, and after it has written the day down</span>
 q)rq[5011;"tables[]!count each value each tables[]"]
-execs| 816
-ord  | 13
-quote| 4864
-trade| 3796
+execs| 478455
+ord  | 18007
+quote| 3124864
+trade| 2384003
 q)rq[5010;".u.endofday[]"]
 q)rq[5011;"tables[]!count each value each tables[]"]
-execs| 3
+execs| 9             <span class="c">/ only what arrived since</span>
 ord  | 0
-quote| 64
-trade| 31
+quote| 96
+trade| 57
 
 <span class="c">/ the tickerplant has rolled</span>
 q)rq[5010;"`date`log!(.u.d;.u.L)"]
-date| 2026.11.20
-log | `:./log/sym2026.11.20
+date| 2026.11.19
+log | `:./log/sym2026.11.19
 
 <span class="c">/ and the HDB now serves the day, partitioned by date, parted on sym</span>
 q)rq[5012;"select n:count i by date from execs"]
 date      | n
 ----------| ------
-2026.11.18| 268500
+2026.11.18| 478455
 2026.11.19| 816
 q)rq[5012;"select n:count i, shares:sum lastQty by date, venue from execs"]
-date       venue| n     shares
-----------------| --------------
-2026.11.18 ARCA | 28110 8314800
-2026.11.18 BATS | 55741 16533400
-2026.11.18 EDGX | 56140 16519200
-2026.11.18 INTL | 42448 12141900
-2026.11.18 MLIT | 58318 18433200
-2026.11.18 NSDQ | 27743 8154700
-2026.11.19 ARCA | 73    24700
-2026.11.19 BATS | 163   54300
-2026.11.19 EDGX | 172   48600
-2026.11.19 INTL | 123   34100
-2026.11.19 MLIT | 202   70600
-2026.11.19 NSDQ | 83    25200
+date       venue| n      shares
+----------------| ---------------
+2026.11.18 ARCA | 50011  14735200
+2026.11.18 BATS | 99318  29308100
+2026.11.18 EDGX | 99909  29326800
+2026.11.18 INTL | 75711  21676400
+2026.11.18 MLIT | 104034 32894500
+2026.11.18 NSDQ | 49472  14514600
+2026.11.19 ARCA | 73     24700
+2026.11.19 BATS | 163    54300
+2026.11.19 EDGX | 172    48600
+2026.11.19 INTL | 123    34100
+2026.11.19 MLIT | 202    70600
+2026.11.19 NSDQ | 83     25200
 q)key `:log/sym
 `s#`2026.11.18`2026.11.19`sym</pre></div>
     </div>
@@ -2832,7 +2832,7 @@ POV     -0.09222666 0.0827877  -1.114014 0.03239336  0.0065232    <span class="c
 ARRIVAL -0.3021686  0.08293203 -3.643569 0.05323769  0.006534572    <span class="c">/ dearer, but fills 5 points more</span>
 DARK    0.2480922   0.08318494 2.982417  0.01073572  0.0065545    <span class="c">/ cheaper, fills about the same</span>
 sizeK   -0.1246076  0.1000023  -1.246047 -0.01317544 0.00787961</pre></div>
-  <p>On 1,001 split parents, relative to VWAP: Arrival costs 0.30 bps more and fills 5.3 points more; Dark costs 0.25 bps less and fills about the same; POV is indistinguishable on price and fills 3 points more. Those are the trade-offs built into the simulator, recovered with standard errors near 0.08 bps from 2,002 algo orders, tighter than the pooled fit manages from 3,514. Fill rate is pinned down far more tightly still, to well under a point, because whether an order completes depends much less on what the market does than its price.</p>
+  <p>On 1,001 split parents, relative to VWAP: Arrival costs 0.30 bps more and fills 5.3 points more; Dark costs 0.25 bps less and fills about the same; POV is indistinguishable on price and fills 3 points more. Those are the trade-offs built into the simulator, recovered with standard errors near 0.08 bps from 2,002 algo orders, tighter than the pooled fit manages from 3,514. A second, independent run of 70 minutes gave the same answer: Arrival 0.26 bps dearer, Dark 0.28 cheaper, POV within noise. Fill rate is pinned down far more tightly still, to well under a point, because whether an order completes depends much less on what the market does than its price.</p>
   <p>That is the honest output of an algo wheel. Random assignment reduces selection bias, and pairing removes the market, but the differences a desk cares about are still a few tenths of a basis point, and they take thousands of orders to resolve. A wheel that reweights on the first week’s averages is reweighting on noise; one that waits for the standard errors to shrink, and prefers paired comparisons where it has them, is not. <code>drivers[]</code> fits the same slippage on <i>how</i> each order was traded — passive share, venue mix, participation — and is the place to look for why an algo costs what it does, but not for which algo to choose: those are things the algo does, so they would soak up the very effect the wheel is trying to measure.</p>
 <p>This is the whole argument of multi-dimensional TCA (<i>Talos</i>, <i>Sparrow</i>): the benchmarks were never meant to be more numbers for a report — they are the feedback the router reads. And the regression that fits them is one line of q, <code>(inv flip[X] mmu X) mmu flip[X] mmu y</code>, over the very same <code>execs</code> and <code>quote</code> tables every other lab in this document used.</p>
 </section>
