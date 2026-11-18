@@ -155,21 +155,23 @@
 
 / ── F8 live exceptions ───────────────────────────────────────────────────
 / The backtest's execution assumptions are model assumptions too. Per algo: how far
-/ its last window of algo orders sits from the other algos in that same window,
-/ against how far it usually sits. Two choices keep this honest. Windows, not
-/ orders, are the observations: orders from the same parent and minute move
-/ together. And each algo is measured relative to the rest, so a move the whole
-/ market makes cancels out: an alert means this algo drifted, not the tape.
-/ Orders younger than h are still working, so their slippage is not final yet.
+/ its last complete window of algo orders sat from the other algos in that same
+/ window, against how far it usually sits. Four choices keep this honest:
+/  - windows, not orders, are the observations (orders from one parent move together);
+/  - each algo is measured against its peers, so a move the whole market makes cancels;
+/  - each window is scored once, when it completes, not every time the timer fires;
+/  - "usually" is the median and the median absolute deviation, so a few wild
+/    windows (dark fills have heavy tails) cannot widen the yardstick.
+/ Orders younger than h are still working, so their window is not complete yet.
 .b.exceptions:{[aa;now;w;h;minW;zMax]
-  e:now-h; aa:select from aa where filled>0, arrivalTime<e;
-  r:select n:count i, recentBps:avg slipBps, recentFill:avg fillRate by algo from aa where arrivalTime>e-w;
-  r:update relBps:recentBps-avg recentBps from 0!r;
-  b:0!select m:avg slipBps, f:avg fillRate by algo, wb:w xbar arrivalTime from aa where arrivalTime<=e-w;
-  b:update rel:m-avg m by wb from b;
-  b:select nW:count i, baseBps:avg m, baseRel:avg rel, sd:dev rel, baseFill:avg f by algo from b;
-  t:update z:(relBps-baseRel)%sd from r lj b;
-  select algo, n, recentBps, baseBps, z, recentFill, baseFill from t where nW>=minW, zMax<abs z };
+  e:now-h; cw:(w xbar e)-w;                                  / last complete window
+  aa:select from aa where filled>0, arrivalTime<cw+w;
+  b:0!select n:count i, m:avg slipBps, f:avg fillRate by algo, wb:w xbar arrivalTime from aa;
+  b:update rel:m-avg m by wb from b;                         / relative to the peers
+  s:select nW:count i, baseBps:avg m, mRel:med rel, mad:1.4826*med abs rel-med rel,
+      baseFill:avg f by algo from b where wb<cw;
+  t:update z:(rel-mRel)%mad from (select from b where wb=cw) lj s;
+  select algo, n, recentBps:m, baseBps, z, recentFill:f, baseFill from t where nW>=minW, mad>0, zMax<abs z };
 
 / ── F9 venue mix ─────────────────────────────────────────────────────────
 / where each algo's shares actually went, and how it got them
@@ -202,17 +204,16 @@
   select from t where n>=minN, zMax<abs z };
 
 / F8, per venue: the same test on realised spread (+ = cost), each venue against
-/ the other venues in the same window. A fill younger than h has no mid h later
-/ yet, so its realised spread is not real; it waits too.
+/ the other venues in the same complete window. A fill younger than h has no mid
+/ h later yet, so its window is not complete.
 .b.venueExceptions:{[sp;now;w;h;minW;zMax]
-  e:now-h; sp:select from sp where time<e;
-  r:select n:count i, recentBps:avg realisedBps by venue from sp where time>e-w;
-  r:update relBps:recentBps-avg recentBps from 0!r;
-  b:0!select m:avg realisedBps by venue, wb:w xbar time from sp where time<=e-w;
+  e:now-h; cw:(w xbar e)-w;
+  sp:select from sp where time<cw+w;
+  b:0!select n:count i, m:avg realisedBps by venue, wb:w xbar time from sp;
   b:update rel:m-avg m by wb from b;
-  b:select nW:count i, baseBps:avg m, baseRel:avg rel, sd:dev rel by venue from b;
-  t:update z:(relBps-baseRel)%sd from r lj b;
-  select venue, n, recentBps, baseBps, z from t where nW>=minW, zMax<abs z };
+  s:select nW:count i, baseBps:avg m, mRel:med rel, mad:1.4826*med abs rel-med rel by venue from b where wb<cw;
+  t:update z:(rel-mRel)%mad from (select from b where wb=cw) lj s;
+  select venue, n, recentBps:m, baseBps, z from t where nW>=minW, mad>0, zMax<abs z };
 
 / ── F11 the audit trail ──────────────────────────────────────────────────
 / one parent, event by event: its NEW, each algo order's NEW, every fill, each with
