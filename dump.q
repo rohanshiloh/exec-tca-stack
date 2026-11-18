@@ -55,6 +55,8 @@ tcaQueries:(
   ".b.exceptions[algoArrival[]; max execs`time; 0D00:05; 20; 0f]";
   "exceptions[]";
   "count alerts";
+  "alerts";
+  "venueAlerts";
   "-5#alerts";
   "select from venueMix[] where algo in `VWAP`DARK";
   "top5[]";
@@ -80,6 +82,7 @@ tcaQueries:(
   "a:select parentOrderID,sym,costBps:neg slipBps,Q:filled from arrival[] where filled>0";
   "a:update pred:1e4*sigma*sqrt Q%adv from a lj sq";
   "fitC:(sum a[`pred]*a`costBps)%sum a[`pred]*a`pred";
+  "fitC";
   "select n:count i, costBps:avg costBps, modelBps:fitC*avg pred by sizeBucket:5 xrank Q from a";
   "vsModel fitC";
   "costCurve fitC";
@@ -91,6 +94,7 @@ tcaQueries:(
   "5#brokerReport[]";
   "select n:count i, priceImpr:avg priceImprBps, vsDayVwap:avg vsDayVwapBps, range:avg rangeCapture, feasible:avg feasibleFill by liveBucket:5 xrank liveSec from brokerReport[] where filled>0";
   ".b.vsModel[algoArrival[]; trade; fitC; max execs`time; 0D00:05; 20; 0f]";
+  "select averageBps:avg bps by venue from markouts[] where horizon=0D00:01:00";
   "select averageBps:avg bps, medBps:med bps, clampedBps:avg .b.winsor[bps;-25f;25f], n:count i by venue from markouts[]";
   "\\t do[20; scorecard[]]";
   "tcaLog[]";
@@ -99,6 +103,8 @@ tcaQueries:(
   "system \"sh -c 'q replay.q /tmp/exec-tca-cut.log -q </dev/null 2>&1; true'\"";
   "rq[5010;\"`date`messages`log!(.u.d;.u.i;.u.L)\"]";
   "rq[5010;\"count each .u.w\"]";
+  "rq[5010;\"key each .u.w\"]";
+  "rq[5010;\"sum each .z.W\"]";
   "rq[5013;\"count each .u.w\"]";
   "rq[5011;\"tables[]!count each value each tables[]\"]";
   "procDir 5011";

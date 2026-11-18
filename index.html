@@ -60,6 +60,7 @@ code{font-family:var(--mono);font-size:.86em}
   background:var(--sheet);color:var(--accent);border:1px solid var(--line);border-radius:3px;padding:2px 7px;cursor:pointer}
 .code button:focus-visible,summary:focus-visible{outline:2px solid var(--accent)}
 .c{color:var(--muted)}
+.code .k{color:var(--s0);font-weight:600}.code .y{color:var(--s1)}.code .s{color:var(--ok)}.code .d{color:var(--sig)}.code .z{color:var(--sh)}.code .p{color:var(--muted)}
 details summary{cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:500}
 details[open] summary{margin-bottom:8px}
 .tbl{overflow-x:auto}
@@ -570,9 +571,9 @@ mjx-container svg{max-width:100%}
 
   <g font-family="Schibsted Grotesk,sans-serif" font-size="12.5" text-anchor="middle">
     <!-- feed -->
-    <rect x="18" y="150" width="104" height="54" rx="4" fill="var(--sheet)" stroke="currentColor"/>
-    <text x="70" y="172" font-weight="600" fill="currentColor">FEED</text>
-    <text x="70" y="189" font-size="11" fill="var(--muted)">feed.q</text>
+    <rect x="18" y="150" width="92" height="54" rx="4" fill="var(--sheet)" stroke="currentColor"/>
+    <text x="64" y="172" font-weight="600" fill="currentColor">FEED</text>
+    <text x="64" y="189" font-size="11" fill="var(--muted)">feed.q</text>
     <!-- TP -->
     <rect x="240" y="148" width="120" height="58" rx="4" fill="var(--sheet)" stroke="var(--s0)" stroke-width="1.6"/>
     <text x="300" y="171" font-weight="600" fill="var(--s0)">TP</text>
@@ -598,7 +599,7 @@ mjx-container svg{max-width:100%}
 
   <!-- data arrows -->
   <g fill="none" stroke="currentColor" stroke-width="1.2">
-    <path d="M122 177 H240" marker-end="url(#ah)"/>
+    <path d="M110 177 H240" marker-end="url(#ah)"/>
     <path d="M360 165 H400 V92 H435" marker-end="url(#ah)"/>
     <path d="M360 180 H435" marker-end="url(#ah)" stroke-opacity=".55"/>
   </g>
@@ -619,7 +620,8 @@ mjx-container svg{max-width:100%}
   </g>
   <!-- stream legend tags on the feed->TP arrow -->
   <g font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)" text-anchor="middle">
-    <text x="181" y="196">quote · trade · ord · execs</text>
+    <text x="175" y="194">quote · trade</text>
+    <text x="175" y="206">ord · execs</text>
   </g>
 </svg>
     </div>
@@ -1445,7 +1447,7 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
 / where each algo's shares actually went, and how it got them
 .b.venueMix:{[execs]
   f:select from execs where execType="F";
-  t:select shares:sum lastQty, fills:count i, passive:avg liq="A" by algo, venue from f;
+  t:select shares:sum lastQty, nFills:count i, passive:avg liq="A" by algo, venue from f;
   update share:shares%sum shares by algo from 0!t };
 
 / ── F10 best-execution report: the top five venues ──────────────────────
@@ -1688,7 +1690,7 @@ bps:{ 0.01*floor 0.5+100*x };                 / round to 2dp for the eye
       </div>
     </details>
     <details class="srcfile" id="src-dump">
-      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">157 lines</span></summary>
+      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">163 lines</span></summary>
       <div class="body">
         <div class="desc"><code>\l dump.q</code> then <code>tcaDump[]</code> in the TCA tab runs every benchmark and writes the output to <code>tcaData.txt</code>. Each query is trapped, so one failure prints its error and the rest still run. The outputs in this document came from it.</div>
         <div class="code"><pre>/ exec-tca-stack : write TCA diagnostics to tcaData.txt
@@ -1748,6 +1750,8 @@ tcaQueries:(
   ".b.exceptions[algoArrival[]; max execs`time; 0D00:05; 20; 0f]";
   "exceptions[]";
   "count alerts";
+  "alerts";
+  "venueAlerts";
   "-5#alerts";
   "select from venueMix[] where algo in `VWAP`DARK";
   "top5[]";
@@ -1773,6 +1777,7 @@ tcaQueries:(
   "a:select parentOrderID,sym,costBps:neg slipBps,Q:filled from arrival[] where filled&gt;0";
   "a:update pred:1e4*sigma*sqrt Q%adv from a lj sq";
   "fitC:(sum a[`pred]*a`costBps)%sum a[`pred]*a`pred";
+  "fitC";
   "select n:count i, costBps:avg costBps, modelBps:fitC*avg pred by sizeBucket:5 xrank Q from a";
   "vsModel fitC";
   "costCurve fitC";
@@ -1784,6 +1789,7 @@ tcaQueries:(
   "5#brokerReport[]";
   "select n:count i, priceImpr:avg priceImprBps, vsDayVwap:avg vsDayVwapBps, range:avg rangeCapture, feasible:avg feasibleFill by liveBucket:5 xrank liveSec from brokerReport[] where filled&gt;0";
   ".b.vsModel[algoArrival[]; trade; fitC; max execs`time; 0D00:05; 20; 0f]";
+  "select averageBps:avg bps by venue from markouts[] where horizon=0D00:01:00";
   "select averageBps:avg bps, medBps:med bps, clampedBps:avg .b.winsor[bps;-25f;25f], n:count i by venue from markouts[]";
   "\\t do[20; scorecard[]]";
   "tcaLog[]";
@@ -1792,6 +1798,8 @@ tcaQueries:(
   "system \"sh -c 'q replay.q /tmp/exec-tca-cut.log -q &lt;/dev/null 2&gt;&amp;1; true'\"";
   "rq[5010;\"`date`messages`log!(.u.d;.u.i;.u.L)\"]";
   "rq[5010;\"count each .u.w\"]";
+  "rq[5010;\"key each .u.w\"]";
+  "rq[5010;\"sum each .z.W\"]";
   "rq[5013;\"count each .u.w\"]";
   "rq[5011;\"tables[]!count each value each tables[]\"]";
   "procDir 5011";
@@ -2517,8 +2525,8 @@ pretrade:{[C;sigma;Q;ADV] 1e4*C*sigma*sqrt Q%0f+ADV };
 q).b.pretrade[0.5; 0.018; 200000; 4000000]   <span class="c">/ C·σ·sqrt(Q/ADV)</span>
 20.12461
 
-<span class="c">/ fit C from realised shortfall</span>
-q)a:arrival[] lj select Q:sum lastQty by parentOrderID from execs where execType="F"</pre></div>
+<span class="c">/ fit C to your own realised shortfall: §Market Impact does it in four lines</span>
+q)fitC</pre></div>
       <div class="code"><pre><span class="c">/ winsorise markouts before you average by venue</span>
 <span class="c">/ beyond.q — clamp each bps into [lo;hi]</span>
 .b.winsor:{[x;lo;hi] lo | hi &amp; x };
@@ -3104,7 +3112,7 @@ q)vsModel fitC                                   <span class="c">/ fitC from §M
 <span class="c">/ where each algo's shares actually went, and how it got them</span>
 .b.venueMix:{[execs]
   f:select from execs where execType="F";
-  t:select shares:sum lastQty, fills:count i, passive:avg liq="A" by algo, venue from f;
+  t:select shares:sum lastQty, nFills:count i, passive:avg liq="A" by algo, venue from f;
   update share:shares%sum shares by algo from 0!t };
 
 q)select from venueMix[] where algo in `VWAP`DARK</pre></div>
@@ -3574,6 +3582,34 @@ window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]},opt
   var eb=document.getElementById('expandbtn');
   if(eb)eb.addEventListener('click',function(){var d=document.querySelectorAll('details.srcfile'),open=eb.textContent.indexOf('Expand')===0;
     for(var i=0;i<d.length;i++)d[i].open=open; eb.textContent=open?'Collapse all files':'Expand all files';});
+})();
+</script>
+<script>
+/* q syntax highlighting: keywords from the q language files, minus this stack's column names */
+(function(){
+  var KW=new Set("abs acos aj aj0 ajf ajf0 all and any asc asin asof atan attr avg avgs bin by ceiling cols cor cos count cov cross csv cut delete deltas desc dev differ distinct div do dsave each ej ema enlist eval except exec exit exp fby fills first fkeys flip floor from get getenv group gtime hclose hcount hdel hopen hsym iasc idesc if ij ijf in insert inter inv key keys last like lj load log lower lsq ltime ltrim mavg max maxs mcount md5 mdev med meta min mins mmax mmin mmu mod msum neg next not null or over parse peach pj plist prd prds prev prior rand rank ratios raze read0 read1 reciprocal reval reverse rload rotate rsave rtrim save scan scov sdev select set setenv show signum sin sqrt ss ssr sublist sum sums sv svar system tables tan til trim type uj ujf ungroup union update upper upsert value var view views vs wavg where while within wj wj1 wsum ww xasc xbar xcol xcols xdesc xexp xgroup xkey xlog xprev xrank".split(" "));
+  var RE=/("(?:\\.|[^"\\])*")|((?:^|(?<=[ \t]))\/(?![:\\]).*)|(^q\)+)|(`[\w.:\/]*)|((?<![\w`])\.[A-Za-z]\w*(?:\.\w+)*)|((?<![\w.`])-?\d[\w:.]*)|((?<![\w.`])[a-z]\w*)|(^\\\w*)/gm;
+  var CLS=[null,"s","c","p","y","z","d","k","z"];
+  function hl(node){
+    var t=node.nodeValue, out=document.createDocumentFragment(), last=0, m, hit=false; RE.lastIndex=0;
+    while((m=RE.exec(t))){
+      var g=1; while(g<CLS.length && m[g]===undefined) g++;
+      if(g===7 && !KW.has(m[0])) continue;
+      if(m.index>last) out.appendChild(document.createTextNode(t.slice(last,m.index)));
+      var sp=document.createElement("span"); sp.className=CLS[g]; sp.textContent=m[0]; out.appendChild(sp);
+      last=m.index+m[0].length; hit=true;
+      if(m[0].length===0) RE.lastIndex++;
+    }
+    if(!hit) return;
+    if(last<t.length) out.appendChild(document.createTextNode(t.slice(last)));
+    node.parentNode.replaceChild(out,node);
+  }
+  document.querySelectorAll(".code pre").forEach(function(pre){
+    var first=pre.textContent.replace(/^\s+/,"").split("\n")[0];
+    if(/^(#!|---|mkdir|\$ |exec-tca-stack\/|cd |git |printf )/.test(first)) return;
+    var w=document.createTreeWalker(pre,NodeFilter.SHOW_TEXT,{acceptNode:function(n){return n.parentNode.closest(".c,.s,.k,.y,.z,.d,.p")?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT}});
+    var ns=[]; while(w.nextNode()) ns.push(w.currentNode); ns.forEach(hl);
+  });
 })();
 </script>
 <script>

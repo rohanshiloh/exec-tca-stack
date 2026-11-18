@@ -170,7 +170,7 @@
 / where each algo's shares actually went, and how it got them
 .b.venueMix:{[execs]
   f:select from execs where execType="F";
-  t:select shares:sum lastQty, fills:count i, passive:avg liq="A" by algo, venue from f;
+  t:select shares:sum lastQty, nFills:count i, passive:avg liq="A" by algo, venue from f;
   update share:shares%sum shares by algo from 0!t };
 
 / ── F10 best-execution report: the top five venues ──────────────────────
