@@ -227,3 +227,33 @@
 .b.daySummary:{[trade]
   0!select firstTime:first time, lastTime:last time, open:first px, high:max px,
       low:min px, close:last px, volume:sum size, vwap:size wavg px by sym from trade };
+
+/ ── the cost curve ───────────────────────────────────────────────────────
+/ Realised cost against order size as a share of the day's volume, in k buckets,
+/ next to the square-root model with fitted constant C. Built on demand from three
+/ live tables: parent (arrivalMid, stamped from quote when the order arrived), execs
+/ (the fills) and trade (the tape, for ADV and sigma). Nothing is stored.
+.b.costCurve:{[a;trade;C;k]
+  sq:select adv:sum size, sigma:dev 1_deltas log px by sym from trade;
+  a:select sym, costBps:neg slipBps, Q:filled from a where filled>0;
+  a:update z:Q%adv, pred:1e4*sigma*sqrt Q%adv from a lj sq;
+  0!select n:count i, pctADV:100*avg z, costBps:avg costBps, se:(dev costBps)%sqrt count i,
+      modelBps:C*avg pred by bucket:k xrank z from a };
+
+/ ── F12 the broker report ────────────────────────────────────────────────
+/ The columns a retail broker's TCA page shows, per parent: price improvement
+/ against the far touch at arrival, cost against the day's VWAP, how much of the
+/ day's high-low range the order captured, how much of it the touch could have
+/ filled at once, and how long it lived.
+.b.brokerReport:{[parent;execs;quote;trade]
+  p:select parentOrderID, sym, side, qty, time:arrivalTime, arrivalMid from 0!parent;
+  p:aj[`sym`time; p; select time,sym,bid,ask,bsize,asize from quote];
+  f:select avgPx:(sum lastPx*lastQty)%sum lastQty, filled:sum lastQty,
+      liveSec:1e-9*`long$(max time)-min time by parentOrderID from execs where execType="F";
+  d:select dHigh:max px, dLow:min px, dVwap:size wavg px by sym from trade;
+  t:(p lj f) lj d;
+  update priceImprBps:1e4*.b.buyorsell[side]*(?[side="B"; ask; bid]-avgPx)%avgPx,
+         vsDayVwapBps:1e4*.b.buyorsell[side]*(dVwap-avgPx)%dVwap,
+         rangeCapture:?[side="B"; (dHigh-avgPx)%dHigh-dLow; (avgPx-dLow)%dHigh-dLow],
+         feasibleFill:1f&(?[side="B"; asize; bsize])%qty,
+         fillRate:(0^filled)%qty from t };

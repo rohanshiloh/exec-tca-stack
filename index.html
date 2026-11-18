@@ -280,6 +280,7 @@ mjx-container svg{max-width:100%}
     <li><a href="#lab-f9"><span class="tn">F9</span>Venue Mix by Algo</a></li>
     <li><a href="#lab-f10"><span class="tn">F10</span>The Top-Five Venue Report</a></li>
     <li><a href="#lab-f11"><span class="tn">F11</span>The Audit Trail</a></li>
+    <li><a href="#lab-f12"><span class="tn">F12</span>The Broker Report</a></li>
   </ol></div>
   <div><h4><a href="#algo-wheel">The Algo Wheel</a></h4><ol><li><a href="#aw-algo">What an Algo Is</a></li><li><a href="#aw-problem">Which One, When?</a></li><li><a href="#aw-wheel">What the Wheel Does</a></li><li><a href="#aw-controller">From Scorecard to Controller</a></li></ol></div>
   <div><h4><a href="#mistakes">Eleven Ways to Get It Wrong</a></h4><ol><li><a href="#mistakes"><span class="tn">·</span>The checklist</a></li></ol></div>
@@ -1008,7 +1009,7 @@ system"t 100";                                 / drive the feed every 100ms
       </div>
     </details>
     <details class="srcfile" id="src-engine">
-      <summary><span class="fn">engine.q</span><span class="role">state + handlers + benchmark wrappers</span><span class="lc">106 lines</span></summary>
+      <summary><span class="fn">engine.q</span><span class="role">state + handlers + benchmark wrappers</span><span class="lc">108 lines</span></summary>
       <div class="body">
         <div class="desc">The core. Holds the live tables, keeps a <code>topMid</code> per sym, stamps arrival price on every parent at its <code>NEW</code>, folds fills into parent state, and exposes the no-argument benchmark wrappers. Loaded by both the live CEP and the replay path, so one code path serves real-time and batch.</div>
         <div class="code"><pre>/ exec-tca-stack : the TCA engine
@@ -1092,6 +1093,8 @@ venueExceptions:{ .b.venueExceptions[spreads[]; max execs`time; 0D00:05; 50; 3f]
 audit:{[pid] .b.audit[parent;ord;execs;quote;pid] };
 bars:{ .b.bars trade };
 daySummary:{ .b.daySummary trade };
+costCurve:{[C] .b.costCurve[arrival[]; trade; C; 10] };      / C: fitC from §Market Impact
+brokerReport:{ .b.brokerReport[parent;execs;quote;trade] };
 / the wheel: arrival slippage per algo order, fitted on which algo it went to.
 / Each coefficient is bps relative to VWAP, after allowing for limit and size.
 wheel:{ f:.b.wheelData[algoOrd;execs;ord];
@@ -1263,7 +1266,7 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
       </div>
     </details>
     <details class="srcfile" id="src-beyond">
-      <summary><span class="fn">beyond.q</span><span class="role">beyond-vanilla benchmarks — the F labs</span><span class="lc">229 lines</span></summary>
+      <summary><span class="fn">beyond.q</span><span class="role">beyond-vanilla benchmarks — the F labs</span><span class="lc">259 lines</span></summary>
       <div class="body">
         <div class="desc">Robust arrival, fee-aware cost, the marketable/limited split, the PWP range, point-in-time bands, execution versus market, and percentile scoring. Defined from the root with explicit <code>.b.</code> names, because KDB-X does not fall back to the root for reads made inside a namespace.</div>
         <div class="code"><pre>/ exec-tca-stack : beyond-vanilla TCA  (the F labs; extends the .b namespace)
@@ -1494,7 +1497,37 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
     by sym, minute:0D00:01 xbar time from trade };
 .b.daySummary:{[trade]
   0!select firstTime:first time, lastTime:last time, open:first px, high:max px,
-      low:min px, close:last px, volume:sum size, vwap:size wavg px by sym from trade };</pre></div>
+      low:min px, close:last px, volume:sum size, vwap:size wavg px by sym from trade };
+
+/ ── the cost curve ───────────────────────────────────────────────────────
+/ Realised cost against order size as a share of the day's volume, in k buckets,
+/ next to the square-root model with fitted constant C. Built on demand from three
+/ live tables: parent (arrivalMid, stamped from quote when the order arrived), execs
+/ (the fills) and trade (the tape, for ADV and sigma). Nothing is stored.
+.b.costCurve:{[a;trade;C;k]
+  sq:select adv:sum size, sigma:dev 1_deltas log px by sym from trade;
+  a:select sym, costBps:neg slipBps, Q:filled from a where filled&gt;0;
+  a:update z:Q%adv, pred:1e4*sigma*sqrt Q%adv from a lj sq;
+  0!select n:count i, pctADV:100*avg z, costBps:avg costBps, se:(dev costBps)%sqrt count i,
+      modelBps:C*avg pred by bucket:k xrank z from a };
+
+/ ── F12 the broker report ────────────────────────────────────────────────
+/ The columns a retail broker's TCA page shows, per parent: price improvement
+/ against the far touch at arrival, cost against the day's VWAP, how much of the
+/ day's high-low range the order captured, how much of it the touch could have
+/ filled at once, and how long it lived.
+.b.brokerReport:{[parent;execs;quote;trade]
+  p:select parentOrderID, sym, side, qty, time:arrivalTime, arrivalMid from 0!parent;
+  p:aj[`sym`time; p; select time,sym,bid,ask,bsize,asize from quote];
+  f:select avgPx:(sum lastPx*lastQty)%sum lastQty, filled:sum lastQty,
+      liveSec:1e-9*`long$(max time)-min time by parentOrderID from execs where execType="F";
+  d:select dHigh:max px, dLow:min px, dVwap:size wavg px by sym from trade;
+  t:(p lj f) lj d;
+  update priceImprBps:1e4*.b.buyorsell[side]*(?[side="B"; ask; bid]-avgPx)%avgPx,
+         vsDayVwapBps:1e4*.b.buyorsell[side]*(dVwap-avgPx)%dVwap,
+         rangeCapture:?[side="B"; (dHigh-avgPx)%dHigh-dLow; (avgPx-dLow)%dHigh-dLow],
+         feasibleFill:1f&amp;(?[side="B"; asize; bsize])%qty,
+         fillRate:(0^filled)%qty from t };</pre></div>
       </div>
     </details>
     <details class="srcfile" id="src-tca">
@@ -1601,7 +1634,7 @@ bps:{ 0.01*floor 0.5+100*x };                 / round to 2dp for the eye
       </div>
     </details>
     <details class="srcfile" id="src-dump">
-      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">149 lines</span></summary>
+      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">152 lines</span></summary>
       <div class="body">
         <div class="desc"><code>\l dump.q</code> then <code>tcaDump[]</code> in the TCA tab runs every benchmark and writes the output to <code>tcaData.txt</code>. Each query is trapped, so one failure prints its error and the rest still run. The outputs in this document came from it.</div>
         <div class="code"><pre>/ exec-tca-stack : write TCA diagnostics to tcaData.txt
@@ -1688,6 +1721,9 @@ tcaQueries:(
   "fitC:(sum a[`pred]*a`costBps)%sum a[`pred]*a`pred";
   "select n:count i, costBps:avg costBps, modelBps:fitC*avg pred by sizeBucket:5 xrank Q from a";
   "vsModel fitC";
+  "costCurve fitC";
+  "5#brokerReport[]";
+  "select n:count i, priceImpr:avg priceImprBps, vsDayVwap:avg vsDayVwapBps, range:avg rangeCapture, feasible:avg feasibleFill by liveBucket:5 xrank liveSec from brokerReport[] where filled&gt;0";
   ".b.vsModel[algoArrival[]; trade; fitC; max execs`time; 0D00:05; 20; 0f]";
   "select averageBps:avg bps, medBps:med bps, clampedBps:avg .b.winsor[bps;-25f;25f], n:count i by venue from markouts[]";
   "\\t do[20; scorecard[]]";
@@ -2360,6 +2396,32 @@ q)a:select parentOrderID,sym,costBps:neg slipBps,Q:filled from arrival[] where f
 q)a:update pred:1e4*sigma*sqrt Q%adv from a lj sq
 q)fitC:(sum a[`pred]*a`costBps)%sum a[`pred]*a`pred       <span class="c">/ least squares through the origin</span>
 q)select n:count i, costBps:avg costBps, modelBps:fitC*avg pred by sizeBucket:5 xrank Q from a</pre></div>
+    <h4 id="cost-curve" style="margin-top:18px">The cost curve</h4>
+    <p>Put the size-bucket table on a chart and you have a <b>cost curve</b>: realised cost on the vertical axis, order size as a share of the day's volume on the horizontal, with the square-root model drawn through it. It is the desk's most-used pre-trade picture, because it answers the question a PM actually asks: what will 5% of the day cost me? (The other curve that goes by the name plots expected cost against timing risk across trading speeds; that one is Almgren and Chriss's efficient trading frontier,<sup><a href="#ref-almgren">2</a></sup> and EDHEC's survey<sup><a href="#ref-edhec">9</a></sup> walks through building it.)</p>
+    <p>Nothing about the curve is stored. It is rebuilt on demand from three live tables, each of which already exists for another reason:</p>
+    <div class="tbl"><table>
+      <thead><tr><th>On the curve</th><th>Comes from</th><th>How it is computed</th><th>Where it lives</th></tr></thead>
+      <tbody>
+        <tr><td>cost, each point's height</td><td><code>parent</code> and <code>execs</code></td><td>arrival slippage per parent, sign flipped so + = cost: <code>neg slipBps</code> from <code>arrival[]</code></td><td><code>arrivalMid</code> is stamped on <code>parent</code> by the CEP from <code>quote</code> when the order arrives; fills come down the chained tickerplant into <code>execs</code></td></tr>
+        <tr><td>size, each point's position</td><td><code>execs</code>, <code>trade</code></td><td>shares filled ÷ the sym's volume for the session: <code>Q%adv</code></td><td>the tape in <code>trade</code>; in production, ADV is a 20- or 30-day average read from the HDB</td></tr>
+        <tr><td>volatility</td><td><code>trade</code></td><td>standard deviation of print-to-print log returns per sym</td><td>computed per query; in production, a daily close-to-close figure kept in a reference table</td></tr>
+        <tr><td>the buckets</td><td>—</td><td><code>10 xrank z</code>: ten equal-count groups by size</td><td>per query</td></tr>
+        <tr><td>the model line</td><td><code>fitC</code></td><td>least squares through the origin, fitted above</td><td>a global in the CEP; in production, refitted nightly and stored with the date</td></tr>
+      </tbody></table></div>
+    <div class="code"><pre><span class="c">/ ── the cost curve ───────────────────────────────────────────────────────</span>
+<span class="c">/ Realised cost against order size as a share of the day's volume, in k buckets,</span>
+<span class="c">/ next to the square-root model with fitted constant C. Built on demand from three</span>
+<span class="c">/ live tables: parent (arrivalMid, stamped from quote when the order arrived), execs</span>
+<span class="c">/ (the fills) and trade (the tape, for ADV and sigma). Nothing is stored.</span>
+.b.costCurve:{[a;trade;C;k]
+  sq:select adv:sum size, sigma:dev 1_deltas log px by sym from trade;
+  a:select sym, costBps:neg slipBps, Q:filled from a where filled&gt;0;
+  a:update z:Q%adv, pred:1e4*sigma*sqrt Q%adv from a lj sq;
+  0!select n:count i, pctADV:100*avg z, costBps:avg costBps, se:(dev costBps)%sqrt count i,
+      modelBps:C*avg pred by bucket:k xrank z from a };
+
+q)costCurve fitC                                 <span class="c">/ one row per bucket: pctADV, costBps ± se, modelBps</span></pre></div>
+    <p>Read it the way you read a markout curve: the points, not the line. If the realised points bend up faster than the model at the large end, your big orders are paying more than their size explains, which usually means they are being worked too fast. And the error bars matter, because the top bucket has the fewest orders and the most noise.</p>
     <p>Two cautions. Realised cost against arrival also carries drift that would have happened without you, so the fit is an upper bound on what you caused unless you remove the market's move first (<a href="#lab-f6">F6</a>). And the per-fill <i>price impact</i> in <a href="#lab-c2">C2</a> is a different number. It is the mid's move after a single fill, and it mixes your impact with adverse selection; one fill's worth of evidence cannot separate them.</p>
   </div>
 
@@ -2506,7 +2568,7 @@ q)key `:log/sym
 <section class="part" id="labs-advanced"><a id="beyond" style="position:absolute" aria-hidden="true"></a>
   <h2>Labs — Beyond Vanilla TCA</h2>
   <p class="lead">Arrival, VWAP and markouts are table stakes. The techniques below are what separates a desk's analytics from a spreadsheet — drawn from how practitioners actually do it: Talos on robust arrival and fee-aware, limit-aware benchmarks; Chris Sparrow on the two-dimensional PWP range; OneTick on point-in-time latency bands; ICE on scoring where there is no tape; and the live exceptions, venue mix, best-execution report and audit trail every vendor TCA ships. Each is a few lines of q because each is, underneath, a sort or an <code>aj</code>.</p>
-  <p class="notice">These live in <code>beyond.q</code>, which <code>engine.q</code> loads after <code>bench.q</code>; nothing in the core library depends on them. Each has a wrapper at the TCA prompt — <code>robust[]</code>, <code>fees[]</code>, <code>cohorts[]</code>, <code>limited[]</code>, <code>pwp[]</code>, <code>bands[]</code>, <code>context[]</code>, <code>peers[]</code>, <code>exceptions[]</code>, <code>venueMix[]</code>, <code>top5[]</code>, <code>audit</code> — and every output below is from a live run of this stack.</p>
+  <p class="notice">These live in <code>beyond.q</code>, which <code>engine.q</code> loads after <code>bench.q</code>; nothing in the core library depends on them. Each has a wrapper at the TCA prompt — <code>robust[]</code>, <code>fees[]</code>, <code>cohorts[]</code>, <code>limited[]</code>, <code>pwp[]</code>, <code>bands[]</code>, <code>context[]</code>, <code>peers[]</code>, <code>exceptions[]</code>, <code>venueMix[]</code>, <code>top5[]</code>, <code>audit</code>, <code>brokerReport[]</code> — and every output below is from a live run of this stack.</p>
 
   <!-- F1 -->
   <div class="lab" id="lab-f1">
@@ -2934,6 +2996,39 @@ q)12#audit pid</pre></div>
     </div>
   </div>
 
+  <!-- F12 -->
+  <div class="lab" id="lab-f12"><a id="broker-report" style="position:absolute" aria-hidden="true"></a>
+    <div class="notes">
+      <h3><span class="n">F12</span>The Broker Report</h3>
+      <div class="where">Run in <span class="tag tsh">TCA</span><span class="tag tany">CTRL</span></div>
+      <p>A retail broker's TCA page<sup><a href="#ref-ibkr">10</a></sup> is a useful check on what a client can already see. Beyond arrival and markouts, it shows four numbers this document had not yet computed: <b>price improvement</b> against the far touch when the order arrived, cost against the <b>day's VWAP</b>, the share of the <b>day's high–low range</b> the order captured (a buy at the low captures 100%), and the <b>feasible fill</b>: how much of the order the touch could have filled at once. It then cuts everything by order size, order type and how long the order lived.</p>
+      <p class="warn">Two of these flatter. The day's VWAP and range use prints from after the order finished, so they carry hindsight that arrival does not. They tell a client whether the day went their way, not whether the execution was good.</p>
+    </div>
+    <div class="cmds">
+      <div class="code"><pre><span class="c">/ ── F12 the broker report ────────────────────────────────────────────────</span>
+<span class="c">/ The columns a retail broker's TCA page shows, per parent: price improvement</span>
+<span class="c">/ against the far touch at arrival, cost against the day's VWAP, how much of the</span>
+<span class="c">/ day's high-low range the order captured, how much of it the touch could have</span>
+<span class="c">/ filled at once, and how long it lived.</span>
+.b.brokerReport:{[parent;execs;quote;trade]
+  p:select parentOrderID, sym, side, qty, time:arrivalTime, arrivalMid from 0!parent;
+  p:aj[`sym`time; p; select time,sym,bid,ask,bsize,asize from quote];
+  f:select avgPx:(sum lastPx*lastQty)%sum lastQty, filled:sum lastQty,
+      liveSec:1e-9*`long$(max time)-min time by parentOrderID from execs where execType="F";
+  d:select dHigh:max px, dLow:min px, dVwap:size wavg px by sym from trade;
+  t:(p lj f) lj d;
+  update priceImprBps:1e4*.b.buyorsell[side]*(?[side="B"; ask; bid]-avgPx)%avgPx,
+         vsDayVwapBps:1e4*.b.buyorsell[side]*(dVwap-avgPx)%dVwap,
+         rangeCapture:?[side="B"; (dHigh-avgPx)%dHigh-dLow; (avgPx-dLow)%dHigh-dLow],
+         feasibleFill:1f&amp;(?[side="B"; asize; bsize])%qty,
+         fillRate:(0^filled)%qty from t };
+
+q)select n:count i, priceImpr:avg priceImprBps, vsDayVwap:avg vsDayVwapBps,
+    range:avg rangeCapture, feasible:avg feasibleFill
+    by liveBucket:5 xrank liveSec from brokerReport[] where filled&gt;0</pre></div>
+    </div>
+  </div>
+
 </section>
 
 <!-- ───────────── THE ALGO WHEEL ───────────── -->
@@ -3242,6 +3337,7 @@ q)select sym, maxDiff:abs vwap-bv from daySummary[] lj select bv:(sum notional)%
     <div class="refitem" id="ref-kx-tca"><span class="rtag">primer · KX</span><div><a href="https://kx.com/glossary/transaction-cost-analysis-an-introduction/">Transaction Cost Analysis: An Introduction — KX</a><p>The vendor's one-page primer: pre- vs post-trade, MiFID II best execution, and why FX TCA is harder than equities.</p></div></div>
     <div class="refitem" id="ref-kx-drift"><span class="rtag">blog · KX</span><div><a href="https://kx.com/blog/drift-detections-blind-spot-how-live-tca-insights-help-firms-win-the-race-against-alpha-decay/">Drift Detection's Blind Spot — KX</a><p>Why execution assumptions belong in a strategy's drift monitoring: the idea behind the live exceptions in F8.</p></div></div>
     <div class="refitem" id="ref-ateam"><span class="rtag">survey · A-Team</span><div><a href="https://a-teaminsight.com/blog/the-top-transaction-cost-analysis-tca-solutions/">The Top Transaction Cost Analysis Solutions — A-Team Insight</a><p>A survey of the vendor TCA market and the features they sell: exception alerting, venue distribution, hit ratios, best-execution reporting.</p></div></div>
+    <div class="refitem" id="ref-rindfleisch"><span class="rtag">same acronym</span><div><span style="color:var(--fg);font-weight:600">Rindfleisch, A., &amp; Heide, J. B. (1997).</span> Transaction Cost Analysis: Past, Present, and Future Applications. <i>Journal of Marketing</i>, 61(4), 30–54.<p>The other TCA: Coase and Williamson's transaction cost economics, on why firms make rather than buy. Not about trading, but the same idea underneath: every exchange has a cost beyond its price.</p></div></div>
 
     <div class="span" style="font-family:var(--display);font-style:normal;font-variant-caps:small-caps;letter-spacing:.035em;font-weight:600;font-size:18px;margin-top:10px;color:var(--fg)">Foundations</div>
     <div class="refitem" id="ref-lifecycle"><span class="rtag">companion</span><div><span style="color:var(--fg);font-weight:600">Shah, R. S. (ed.).</span> <a href="https://rohanshiloh.github.io/order-trade-lifecycle/">The Order &amp; Trade Lifecycle</a>.<p>The companion to this document: market structure, the OMS and EMS, FIX, post-trade, and the lifecycle as a kdb+ event stream. This document picks up where its analytics section stops.</p></div></div>
@@ -3251,6 +3347,8 @@ q)select sym, maxDiff:abs vwap-bv from daySummary[] lj select bv:(sum notional)%
     <div class="refitem" id="ref-bouchaud"><span class="rtag">[4] paper</span><div><span style="color:var(--fg);font-weight:600">Bouchaud, Farmer &amp; Lillo (2009).</span> How Markets Slowly Digest Changes in Supply and Demand. <i>Handbook of Financial Markets</i>, 57–160.<p>Market impact and its slow decay — the theory under markouts and realised-spread reversion.</p></div></div>
     <div class="refitem" id="ref-madhavan"><span class="rtag">[5] paper</span><div><span style="color:var(--fg);font-weight:600">Madhavan, A. (2000).</span> Market Microstructure: A Survey. <i>Journal of Financial Markets</i>, 3(3), 205–258.<p>The microstructure ground — price formation, spreads and information — under every benchmark.</p></div></div>
     <div class="refitem" id="ref-earley"><span class="rtag">[8] paper</span><div><span style="color:var(--fg);font-weight:600">Earley, C. (KX).</span> <a href="https://code.kx.com/q/wp/transaction-cost/">Transaction-Cost Analysis Using kdb+</a>. <i>KX white paper</i>.<p>TCA in q at production scale: interval VWAP from running sums and <code>aj</code>, window joins, trade-condition flags, pre-computed bars.</p></div></div>
+    <div class="refitem" id="ref-edhec"><span class="rtag">[9] survey</span><div><span style="color:var(--fg);font-weight:600">D'Hondt, C., &amp; Giraud, J.-R. (2008).</span> Transaction Cost Analysis A–Z: A Step towards Best Execution in the Post-MiFID Landscape. <i>EDHEC Risk and Asset Management Research Centre</i>.<p>The full arc in one place: cost components, post-trade benchmarks and their pitfalls, Kissell–Glantz pre-trade impact and timing-risk models, and the efficient trading frontier.</p></div></div>
+    <div class="refitem" id="ref-ibkr"><span class="rtag">[10] broker</span><div><a href="https://www.ibkrguides.com/advisorportal/ug/understandingtrans.htm">Understanding the Transaction Cost Analysis — Interactive Brokers</a><p>What a client-facing TCA report shows: price improvement, markouts from 1s to 10 min, daily VWAP and range capture, feasible fill rate. The model for F12.</p></div></div>
   </div>
 </section>
 
