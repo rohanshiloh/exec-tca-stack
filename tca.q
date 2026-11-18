@@ -20,9 +20,12 @@ alerts:([] time:`timespan$(); algo:`symbol$(); n:`long$(); recentBps:`float$();
   baseBps:`float$(); z:`float$(); recentFill:`float$(); baseFill:`float$());
 venueAlerts:([] time:`timespan$(); venue:`symbol$(); n:`long$(); recentBps:`float$();
   baseBps:`float$(); z:`float$());
+/ one alert per episode: an algo or venue already flagged in the last 2 minutes waits
 .z.ts:{ if[0=count execs; :()]; now:max execs`time;
-  e:exceptions[]; if[count e; `alerts insert (cols alerts)#update time:now from e];
-  v:venueExceptions[]; if[count v; `venueAlerts insert (cols venueAlerts)#update time:now from v] };
+  e:exceptions[]; e:select from e where not algo in exec algo from alerts where time>now-0D00:02;
+  if[count e; `alerts insert (cols alerts)#update time:now from e];
+  v:venueExceptions[]; v:select from v where not venue in exec venue from venueAlerts where time>now-0D00:02;
+  if[count v; `venueAlerts insert (cols venueAlerts)#update time:now from v] };
 system"t 10000";
 
 -1"tca → subscribed @ ",TP,"   try:  arrival[]  scorecard[]  algoScorecard[]  wheelPaired[]  alerts  venueAlerts";
