@@ -71,6 +71,9 @@ pwp:{ .b.pwpTable[parent;trade;execs;0.2] };
 bands:{ .b.pitBands[execs;quote] };
 context:{ .b.contextNorm[parent;execs;quote] };
 peers:{ .b.pctScore[parent;execs] };
+exceptions:{ .b.exceptions[algoArrival[]; max execs`time; 0D00:05; 20; 3f] };   / last 5 min, 20+ orders, |z|>3
+venueMix:{ .b.venueMix execs };
+top5:{ .b.top5 execs };
 / the wheel: arrival slippage per algo order, fitted on which algo it went to.
 / Each coefficient is bps relative to VWAP, after allowing for limit and size.
 wheel:{ f:.b.wheelData[algoOrd;execs;ord];

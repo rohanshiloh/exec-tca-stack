@@ -10,8 +10,16 @@ TP:$[count .z.x; first .z.x; ":5013"];
 / end of day, relayed by the chained tickerplant: start the new day empty
 .u.end:{[d] {@[`.;x;0#]} each `quote`trade`ord`execs;
   @[;`sym;`g#] each `quote`trade`ord`execs;
-  delete from `parent; delete from `algoOrd;
+  delete from `parent; delete from `algoOrd; delete from `alerts;
   topMid::(`symbol$())!`float$();                   / no stale mid from yesterday
   -1"end of day ",string[d],": intraday state cleared"; };
 
--1"tca → subscribed @ ",TP,"   try:  arrival[]  scorecard[]  algoScorecard[]  wheelPaired[]";
+/ F8 live: every 10s, append any algo running away from its own baseline.
+/ Exception-based: the table stays empty until something needs a human.
+alerts:([] time:`timespan$(); algo:`symbol$(); n:`long$(); recentBps:`float$();
+  baseBps:`float$(); z:`float$(); recentFill:`float$(); baseFill:`float$());
+.z.ts:{ if[0=count execs; :()]; e:exceptions[]; now:max execs`time;
+  if[count e; `alerts insert (cols alerts)#update time:now from e] };
+system"t 10000";
+
+-1"tca → subscribed @ ",TP,"   try:  arrival[]  scorecard[]  algoScorecard[]  wheelPaired[]  alerts";

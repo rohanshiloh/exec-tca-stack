@@ -152,3 +152,34 @@
       dSlip:(first slipBps)-last slipBps, dFill:(first fillRate)-last fillRate,
       dSize:(first sizeK)-last sizeK
     by parentOrderID from a };
+
+/ ── F8 live exceptions ───────────────────────────────────────────────────
+/ The backtest's execution assumptions are model assumptions too. Per algo, the
+/ algo orders that arrived in the last w against the session so far: flag an algo
+/ only when its recent mean sits more than zMax standard errors from its baseline,
+/ on at least minN orders. (The baseline includes the recent orders, so the test
+/ is conservative.)
+.b.exceptions:{[aa;now;w;minN;zMax]
+  aa:select from aa where filled>0;
+  b:select baseBps:avg slipBps, sd:dev slipBps, baseFill:avg fillRate by algo from aa;
+  r:select n:count i, recentBps:avg slipBps, recentFill:avg fillRate by algo from aa where arrivalTime>now-w;
+  t:update z:(recentBps-baseBps)%sd%sqrt n from 0!r lj b;
+  select algo, n, recentBps, baseBps, z, recentFill, baseFill from t where n>=minN, zMax<abs z };
+
+/ ── F9 venue mix ─────────────────────────────────────────────────────────
+/ where each algo's shares actually went, and how it got them
+.b.venueMix:{[execs]
+  f:select from execs where execType="F";
+  t:select shares:sum lastQty, fills:count i, passive:avg liq="A" by algo, venue from f;
+  update share:shares%sum shares by algo from 0!t };
+
+/ ── F10 best-execution report: the top five venues ──────────────────────
+/ In the shape of MiFID II's RTS 28 table: share of volume and of orders, and how
+/ much was passive (added) vs aggressive (removed). Dark (M) and house (I) fills are
+/ neither, so the two need not sum to 100.
+.b.top5:{[execs]
+  f:select from execs where execType="F";
+  v:select vol:sum lastQty, nOrd:count distinct algoOrderID,
+      pctPassive:100*avg liq="A", pctAggressive:100*avg liq="R" by venue from f;
+  v:update pctVol:100*vol%sum vol, pctOrders:100*nOrd%sum nOrd from 0!v;
+  5#`pctVol xdesc select venue, pctVol, pctOrders, pctPassive, pctAggressive from v };

@@ -52,6 +52,12 @@ tcaQueries:(
   "count .b.wheelPairs[algoOrd;execs]";
   "5#.b.wheelPairs[algoOrd;execs]";
   "wheelPaired[]";
+  ".b.exceptions[algoArrival[]; max execs`time; 0D00:05; 20; 0f]";
+  "exceptions[]";
+  "count alerts";
+  "-5#alerts";
+  "select from venueMix[] where algo in `VWAP`DARK";
+  "top5[]";
   "drivers[]";
   "select n:count i, avgPassive:avg liq=\"A\", avgDark:avg liq in \"MI\" by algo from execs";
   "5#select tot:distinct cumQty+leaves by algoOrderID from execs";
