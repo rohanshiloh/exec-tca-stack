@@ -71,11 +71,11 @@ pwp:{ .b.pwpTable[parent;trade;execs;0.2] };
 bands:{ .b.pitBands[execs;quote] };
 context:{ .b.contextNorm[parent;execs;quote] };
 peers:{ .b.pctScore[parent;execs] };
-exceptions:{ .b.exceptions[algoArrival[]; max execs`time; 0D00:02; 0D00:01; 5; 3f] };   / 2-min windows, done orders, 5+ past windows
+exceptions:{ .b.exceptions[algoArrival[]; max execs`time; 0D00:02; 0D00:01; 10; 3f] };   / 2-min windows, done orders, 10+ past windows
 venueMix:{ .b.venueMix execs };
 top5:{ .b.top5 execs };
 vsModel:{[C] .b.vsModel[algoArrival[]; trade; C; max execs`time; 0D00:05; 20; 3f] };
-venueExceptions:{ .b.venueExceptions[spreads[]; max execs`time; 0D00:02; 0D00:00:10; 5; 3f] };
+venueExceptions:{ .b.venueExceptions[spreads[]; max execs`time; 0D00:02; 0D00:00:10; 10; 3f] };
 audit:{[pid] .b.audit[parent;ord;execs;quote;pid] };
 bars:{ .b.bars trade };
 daySummary:{ .b.daySummary trade };
