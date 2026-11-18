@@ -81,6 +81,9 @@ bars:{ .b.bars trade };
 daySummary:{ .b.daySummary trade };
 costCurve:{[C] .b.costCurve[arrival[]; trade; C; 10] };      / C: fitC from §Market Impact
 brokerReport:{ .b.brokerReport[parent;execs;quote;trade] };
+/ four-way shortfall: decision = the mid 5s before arrival, end = the close
+shortfall4:{ .b.shortfall4[parent;algoOrd;execs;quote;0D00:00:05; exec sym!closePx from closes[]] };
+dayBench:{ .b.dayBench[parent;execs;trade;refPx] };        / refPx stands in for yesterday's close
 / the wheel: arrival slippage per algo order, fitted on which algo it went to.
 / Each coefficient is bps relative to VWAP, after allowing for limit and size.
 wheel:{ f:.b.wheelData[algoOrd;execs;ord];

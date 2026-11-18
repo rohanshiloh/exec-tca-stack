@@ -83,6 +83,11 @@ tcaQueries:(
   "select n:count i, costBps:avg costBps, modelBps:fitC*avg pred by sizeBucket:5 xrank Q from a";
   "vsModel fitC";
   "costCurve fitC";
+  "5#shortfall4[]";
+  "select n:count i, ops:avg opsBps, timing:avg timingBps, exec:avg execBps, opp:avg oppBps, total:avg isBps, maxGap:max abs isBps-opsBps+timingBps+execBps+oppBps from shortfall4[]";
+  ".b.istar[10f;200f;100000%950000]";
+  "5#dayBench[]";
+  "select n:count i, prevClose:avg vsPrevClose, open:avg vsOpen, availVwap:avg vsAvailVwap, lhoc:avg vsLHOC, midHL:avg vsMidHL, close:avg vsClose by side from dayBench[]";
   "5#brokerReport[]";
   "select n:count i, priceImpr:avg priceImprBps, vsDayVwap:avg vsDayVwapBps, range:avg rangeCapture, feasible:avg feasibleFill by liveBucket:5 xrank liveSec from brokerReport[] where filled>0";
   ".b.vsModel[algoArrival[]; trade; fitC; max execs`time; 0D00:05; 20; 0f]";

@@ -257,3 +257,53 @@
          rangeCapture:?[side="B"; (dHigh-avgPx)%dHigh-dLow; (avgPx-dLow)%dHigh-dLow],
          feasibleFill:1f&(?[side="B"; asize; bsize])%qty,
          fillRate:(0^filled)%qty from t };
+
+/ ── four prices, four costs ──────────────────────────────────────────────
+/ Perold's shortfall split at the four moments EDHEC names: the decision (P0,
+/ the mid lag before the parent arrived), the desk's release to the broker (PR,
+/ the parent's arrivalMid), the broker starting work (PS, the qty-weighted
+/ arrivalMid of its algo orders) and the end (PT). + = favourable, all in bps of P0.
+/ ops + timing are charged on every share, execution on the filled ones and
+/ opportunity on the unfilled ones; the four always sum to Perold's total, isBps.
+.b.shortfall4:{[parent;algoOrd;execs;quote;lag;closes]
+  a:.b.arrival[parent;execs];
+  d:aj[`sym`time; select sym, time:arrivalTime-lag from a; select time,sym,bid,ask from quote];
+  a:update decisionMid:0.5*d[`bid]+d`ask from a;
+  a:a lj select startMid:qty wavg arrivalMid by parentOrderID from algoOrd;
+  a:update phi:.b.buyorsell side, endPx:closes sym from a;
+  a:update opsBps:1e4*phi*(decisionMid-arrivalMid)%decisionMid,
+           timingBps:1e4*phi*(arrivalMid-startMid)%decisionMid,
+           execBps:?[fillRate>0; fillRate*1e4*phi*(startMid-averageFillPrice)%decisionMid; 0f],
+           oppBps:(1-fillRate)*1e4*phi*(startMid-endPx)%decisionMid,
+           isBps:(?[fillRate>0; fillRate*1e4*phi*(decisionMid-averageFillPrice)%decisionMid; 0f])
+                 +(1-fillRate)*1e4*phi*(decisionMid-endPx)%decisionMid from a;
+  select parentOrderID, sym, side, fillRate, decisionMid, arrivalMid, startMid, averageFillPrice,
+    endPx, opsBps, timingBps, execBps, oppBps, isBps from a };
+
+/ ── I-star: Kissell and Glantz's impact model ────────────────────────────
+/ Instantaneous impact I = a1 * Z^a2 * sigma^a3 (bps), Z = size as % of ADV,
+/ sigma = daily volatility in bps; about 95% of it is temporary and fades with
+/ slower trading. pov = order size / market volume over the horizon, so the
+/ participation number eta = 1 + 0.5/pov. Defaults: EDHEC's power-function fit.
+.b.istar:{[Z;sigmaBps;pov]
+  i:25*(Z xexp 0.38)*sigmaBps xexp 0.28;
+  i*0.05+0.95%1+0.5%pov };
+
+/ ── the rest of the yardsticks ───────────────────────────────────────────
+/ The day-level benchmarks a report still shows, against each parent's average
+/ fill: yesterday's close, the open, the VWAP available at arrival (open to
+/ arrival, nothing after), LHOC (mean of low, high, open, close), the high-low
+/ midpoint, and the close. + = favourable. Only the first three were knowable
+/ when the order arrived; the rest carry hindsight.
+.b.dayBench:{[parent;execs;trade;prevCl]
+  a:select parentOrderID, sym, side, time:arrivalTime, averageFillPrice from .b.arrival[parent;execs] where filled>0;
+  c:update cn:sums px*size, cv:sums size by sym from select time,sym,px,size from trade;
+  a:aj[`sym`time; a; select sym,time,cn,cv from c];
+  a:a lj select open:first px, high:max px, low:min px, close:last px by sym from trade;
+  a:update phi:.b.buyorsell side, prevClose:prevCl sym, availVwap:cn%cv,
+           lhoc:0.25*low+high+open+close, midHL:0.5*high+low from a;
+  f:{[phi;b;p] 1e4*phi*(b-p)%b};
+  select parentOrderID, sym, side, averageFillPrice,
+    vsPrevClose:f[phi;prevClose;averageFillPrice], vsOpen:f[phi;open;averageFillPrice],
+    vsAvailVwap:f[phi;availVwap;averageFillPrice], vsLHOC:f[phi;lhoc;averageFillPrice],
+    vsMidHL:f[phi;midHL;averageFillPrice], vsClose:f[phi;close;averageFillPrice] from a };

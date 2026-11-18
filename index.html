@@ -281,9 +281,10 @@ mjx-container svg{max-width:100%}
     <li><a href="#lab-f10"><span class="tn">F10</span>The Top-Five Venue Report</a></li>
     <li><a href="#lab-f11"><span class="tn">F11</span>The Audit Trail</a></li>
     <li><a href="#lab-f12"><span class="tn">F12</span>The Broker Report</a></li>
+    <li><a href="#lab-f13"><span class="tn">F13</span>The Rest of the Yardsticks</a></li>
   </ol></div>
   <div><h4><a href="#algo-wheel">The Algo Wheel</a></h4><ol><li><a href="#aw-algo">What an Algo Is</a></li><li><a href="#aw-problem">Which One, When?</a></li><li><a href="#aw-wheel">What the Wheel Does</a></li><li><a href="#aw-controller">From Scorecard to Controller</a></li></ol></div>
-  <div><h4><a href="#mistakes">Eleven Ways to Get It Wrong</a></h4><ol><li><a href="#mistakes"><span class="tn">·</span>The checklist</a></li></ol></div>
+  <div><h4><a href="#mistakes">Twelve Ways to Get It Wrong</a></h4><ol><li><a href="#mistakes"><span class="tn">·</span>The checklist</a></li></ol></div>
   <div><h4><a href="#production">Production Notes</a></h4><ol><li><a href="#pr-kafka">Kafka Ingest</a></li><li><a href="#pr-access">A Data-access Layer</a></li><li><a href="#pr-realdata">Real Tick Data</a></li><li><a href="#pr-writedown">Writing the Day Down</a></li></ol></div>
   <div><h4><a href="#five-rules">Five Rules</a></h4><ol><li><a href="#five-rules"><span class="tn">·</span>What to keep</a></li></ol></div>
   <div><h4><a href="#references">References</a></h4><ol><li><a href="#references"><span class="tn">·</span>Microstructure &amp; Order Books</a></li><li><a href="#references"><span class="tn">·</span>kdb+ Plumbing</a></li><li><a href="#references"><span class="tn">·</span>TCA &amp; Data</a></li></ol></div>
@@ -1009,7 +1010,7 @@ system"t 100";                                 / drive the feed every 100ms
       </div>
     </details>
     <details class="srcfile" id="src-engine">
-      <summary><span class="fn">engine.q</span><span class="role">state + handlers + benchmark wrappers</span><span class="lc">108 lines</span></summary>
+      <summary><span class="fn">engine.q</span><span class="role">state + handlers + benchmark wrappers</span><span class="lc">111 lines</span></summary>
       <div class="body">
         <div class="desc">The core. Holds the live tables, keeps a <code>topMid</code> per sym, stamps arrival price on every parent at its <code>NEW</code>, folds fills into parent state, and exposes the no-argument benchmark wrappers. Loaded by both the live CEP and the replay path, so one code path serves real-time and batch.</div>
         <div class="code"><pre>/ exec-tca-stack : the TCA engine
@@ -1095,6 +1096,9 @@ bars:{ .b.bars trade };
 daySummary:{ .b.daySummary trade };
 costCurve:{[C] .b.costCurve[arrival[]; trade; C; 10] };      / C: fitC from §Market Impact
 brokerReport:{ .b.brokerReport[parent;execs;quote;trade] };
+/ four-way shortfall: decision = the mid 5s before arrival, end = the close
+shortfall4:{ .b.shortfall4[parent;algoOrd;execs;quote;0D00:00:05; exec sym!closePx from closes[]] };
+dayBench:{ .b.dayBench[parent;execs;trade;refPx] };        / refPx stands in for yesterday's close
 / the wheel: arrival slippage per algo order, fitted on which algo it went to.
 / Each coefficient is bps relative to VWAP, after allowing for limit and size.
 wheel:{ f:.b.wheelData[algoOrd;execs;ord];
@@ -1266,7 +1270,7 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
       </div>
     </details>
     <details class="srcfile" id="src-beyond">
-      <summary><span class="fn">beyond.q</span><span class="role">beyond-vanilla benchmarks — the F labs</span><span class="lc">259 lines</span></summary>
+      <summary><span class="fn">beyond.q</span><span class="role">beyond-vanilla benchmarks — the F labs</span><span class="lc">309 lines</span></summary>
       <div class="body">
         <div class="desc">Robust arrival, fee-aware cost, the marketable/limited split, the PWP range, point-in-time bands, execution versus market, and percentile scoring. Defined from the root with explicit <code>.b.</code> names, because KDB-X does not fall back to the root for reads made inside a namespace.</div>
         <div class="code"><pre>/ exec-tca-stack : beyond-vanilla TCA  (the F labs; extends the .b namespace)
@@ -1527,7 +1531,57 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
          vsDayVwapBps:1e4*.b.buyorsell[side]*(dVwap-avgPx)%dVwap,
          rangeCapture:?[side="B"; (dHigh-avgPx)%dHigh-dLow; (avgPx-dLow)%dHigh-dLow],
          feasibleFill:1f&amp;(?[side="B"; asize; bsize])%qty,
-         fillRate:(0^filled)%qty from t };</pre></div>
+         fillRate:(0^filled)%qty from t };
+
+/ ── four prices, four costs ──────────────────────────────────────────────
+/ Perold's shortfall split at the four moments EDHEC names: the decision (P0,
+/ the mid lag before the parent arrived), the desk's release to the broker (PR,
+/ the parent's arrivalMid), the broker starting work (PS, the qty-weighted
+/ arrivalMid of its algo orders) and the end (PT). + = favourable, all in bps of P0.
+/ ops + timing are charged on every share, execution on the filled ones and
+/ opportunity on the unfilled ones; the four always sum to Perold's total, isBps.
+.b.shortfall4:{[parent;algoOrd;execs;quote;lag;closes]
+  a:.b.arrival[parent;execs];
+  d:aj[`sym`time; select sym, time:arrivalTime-lag from a; select time,sym,bid,ask from quote];
+  a:update decisionMid:0.5*d[`bid]+d`ask from a;
+  a:a lj select startMid:qty wavg arrivalMid by parentOrderID from algoOrd;
+  a:update phi:.b.buyorsell side, endPx:closes sym from a;
+  a:update opsBps:1e4*phi*(decisionMid-arrivalMid)%decisionMid,
+           timingBps:1e4*phi*(arrivalMid-startMid)%decisionMid,
+           execBps:?[fillRate&gt;0; fillRate*1e4*phi*(startMid-averageFillPrice)%decisionMid; 0f],
+           oppBps:(1-fillRate)*1e4*phi*(startMid-endPx)%decisionMid,
+           isBps:(?[fillRate&gt;0; fillRate*1e4*phi*(decisionMid-averageFillPrice)%decisionMid; 0f])
+                 +(1-fillRate)*1e4*phi*(decisionMid-endPx)%decisionMid from a;
+  select parentOrderID, sym, side, fillRate, decisionMid, arrivalMid, startMid, averageFillPrice,
+    endPx, opsBps, timingBps, execBps, oppBps, isBps from a };
+
+/ ── I-star: Kissell and Glantz's impact model ────────────────────────────
+/ Instantaneous impact I = a1 * Z^a2 * sigma^a3 (bps), Z = size as % of ADV,
+/ sigma = daily volatility in bps; about 95% of it is temporary and fades with
+/ slower trading. pov = order size / market volume over the horizon, so the
+/ participation number eta = 1 + 0.5/pov. Defaults: EDHEC's power-function fit.
+.b.istar:{[Z;sigmaBps;pov]
+  i:25*(Z xexp 0.38)*sigmaBps xexp 0.28;
+  i*0.05+0.95%1+0.5%pov };
+
+/ ── the rest of the yardsticks ───────────────────────────────────────────
+/ The day-level benchmarks a report still shows, against each parent's average
+/ fill: yesterday's close, the open, the VWAP available at arrival (open to
+/ arrival, nothing after), LHOC (mean of low, high, open, close), the high-low
+/ midpoint, and the close. + = favourable. Only the first three were knowable
+/ when the order arrived; the rest carry hindsight.
+.b.dayBench:{[parent;execs;trade;prevCl]
+  a:select parentOrderID, sym, side, time:arrivalTime, averageFillPrice from .b.arrival[parent;execs] where filled&gt;0;
+  c:update cn:sums px*size, cv:sums size by sym from select time,sym,px,size from trade;
+  a:aj[`sym`time; a; select sym,time,cn,cv from c];
+  a:a lj select open:first px, high:max px, low:min px, close:last px by sym from trade;
+  a:update phi:.b.buyorsell side, prevClose:prevCl sym, availVwap:cn%cv,
+           lhoc:0.25*low+high+open+close, midHL:0.5*high+low from a;
+  f:{[phi;b;p] 1e4*phi*(b-p)%b};
+  select parentOrderID, sym, side, averageFillPrice,
+    vsPrevClose:f[phi;prevClose;averageFillPrice], vsOpen:f[phi;open;averageFillPrice],
+    vsAvailVwap:f[phi;availVwap;averageFillPrice], vsLHOC:f[phi;lhoc;averageFillPrice],
+    vsMidHL:f[phi;midHL;averageFillPrice], vsClose:f[phi;close;averageFillPrice] from a };</pre></div>
       </div>
     </details>
     <details class="srcfile" id="src-tca">
@@ -1634,7 +1688,7 @@ bps:{ 0.01*floor 0.5+100*x };                 / round to 2dp for the eye
       </div>
     </details>
     <details class="srcfile" id="src-dump">
-      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">152 lines</span></summary>
+      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">157 lines</span></summary>
       <div class="body">
         <div class="desc"><code>\l dump.q</code> then <code>tcaDump[]</code> in the TCA tab runs every benchmark and writes the output to <code>tcaData.txt</code>. Each query is trapped, so one failure prints its error and the rest still run. The outputs in this document came from it.</div>
         <div class="code"><pre>/ exec-tca-stack : write TCA diagnostics to tcaData.txt
@@ -1722,6 +1776,11 @@ tcaQueries:(
   "select n:count i, costBps:avg costBps, modelBps:fitC*avg pred by sizeBucket:5 xrank Q from a";
   "vsModel fitC";
   "costCurve fitC";
+  "5#shortfall4[]";
+  "select n:count i, ops:avg opsBps, timing:avg timingBps, exec:avg execBps, opp:avg oppBps, total:avg isBps, maxGap:max abs isBps-opsBps+timingBps+execBps+oppBps from shortfall4[]";
+  ".b.istar[10f;200f;100000%950000]";
+  "5#dayBench[]";
+  "select n:count i, prevClose:avg vsPrevClose, open:avg vsOpen, availVwap:avg vsAvailVwap, lhoc:avg vsLHOC, midHL:avg vsMidHL, close:avg vsClose by side from dayBench[]";
   "5#brokerReport[]";
   "select n:count i, priceImpr:avg priceImprBps, vsDayVwap:avg vsDayVwapBps, range:avg rangeCapture, feasible:avg feasibleFill by liveBucket:5 xrank liveSec from brokerReport[] where filled&gt;0";
   ".b.vsModel[algoArrival[]; trade; fitC; max execs`time; 0D00:05; 20; 0f]";
@@ -1919,6 +1978,10 @@ q)\\          <span class="c">/ or just exit</span></pre></div>
     <thead><tr><th>Metric</th><th>The q</th><th>Answers</th><th>Best for</th><th>Blind to</th></tr></thead>
     <tbody><tr><td>Arrival / IS</td><td>1e4*φ*(arrivalMid-averageFillPrice)%arrivalMid</td><td>Did I execute well, from when the desk got it?</td><td>the primary number</td><td>the delay <i>before</i> arrival; the unfilled remainder</td></tr>
       <tr><td>Opportunity cost</td><td>(1-fillRate)*1e4*φ*(arrivalMid-endPx)%decisionMid</td><td>What did the shares I never got cost me?</td><td>partial fills</td><td>needs an end price you can defend</td></tr>
+      <tr><td>Four-way IS</td><td>shortfall4[]</td><td>Who held the order when the cost came in?</td><td>desk vs broker accountability</td><td>needs a decision time you rarely have</td></tr>
+      <tr><td>Previous close / open</td><td>1e4*φ*(prevClose-averageFillPrice)%prevClose</td><td>How did I do against last night's mark, or the open?</td><td>orders decided overnight</td><td>everything that happened before you could trade</td></tr>
+      <tr><td>Available VWAP</td><td>cn%cv at arrivalTime</td><td>Did I beat the day's average so far?</td><td>a benchmark with no hindsight</td><td>nothing after arrival</td></tr>
+      <tr><td>LHOC / mid H–L</td><td>0.25*low+high+open+close</td><td>Where in the day's range did I land?</td><td>quick sanity checks</td><td>volume; and it knows the day's high, which you didn't</td></tr>
       <tr><td>Interval VWAP</td><td>(v`size) wavg v`px</td><td>Did I beat the tape over my own window?</td><td>algo comparison</td><td>gameable — you pick the window</td></tr>
       <tr><td>TWAP</td><td>avg 0.5*q[`bid]+q`ask</td><td>Did I beat the clock?</td><td>schedule trading</td><td>ignores when the volume actually arrived</td></tr>
       <tr><td>PWP</td><td>pwpRange[trade;tenor;sy;startTime;Q]</td><td>Did I beat my own opportunity set?</td><td>POV execution</td><td>harder to explain to a PM</td></tr>
@@ -1927,6 +1990,7 @@ q)\\          <span class="c">/ or just exit</span></pre></div>
       <tr><td>Effective spread <span class="g">(+ = cost)</span></td><td>1e4*2*φ*(lastPx-mid0)%lastPx</td><td>What did immediacy cost me, right then?</td><td>microstructure, fee comparison</td><td>is not the total cost</td></tr>
       <tr><td>Realised spread <span class="g">(+ = cost)</span></td><td>1e4*2*φ*(lastPx-midh)%lastPx</td><td>How much of that did I keep?</td><td>venue quality</td><td>horizon-sensitive — pick one and stay there</td></tr>
       <tr><td>Impact <span class="g">(+ = cost)</span></td><td>effectiveBps-realisedBps</td><td>How far did the mid move after the fill, and stay?</td><td>sizing and urgency</td><td>routinely confused with adverse selection</td></tr>
+      <tr><td>I-star <span class="g">(+ = cost)</span></td><td>.b.istar[Z;sigmaBps;pov]</td><td>What should this order cost, at this speed?</td><td>pre-trade, comparing schedules</td><td>someone else's fitted constants</td></tr>
       <tr><td>OFI</td><td>(sum db)-sum da</td><td>Which side has pressure right now?</td><td>placement context</td><td>context, not a forecast</td></tr>
       <tr><td>POV</td><td>executedQty%tapeVolume</td><td>How hard did I push?</td><td>schedule control</td><td>says nothing about execution quality</td></tr></tbody>
   </table></div>
@@ -2109,7 +2173,7 @@ q)count parent                 <span class="c">/ identical to the live run</span
       <h3><span class="n">B1</span>Arrival Price &amp; Shortfall</h3>
       <div class="where">Run in <span class="tag tsh">TCA</span></div>
       <p>The arrival mid is captured in-band at the <code>NEW</code> (lab A1) — the one number you cannot reconstruct afterwards, because it is what the book looked like <i>when you decided</i>. Slippage is the average fill against it, signed so positive is favourable.</p>
-      <p>Implementation shortfall splits that into <b>delay</b> (decision → arrival), <b>execution</b> (arrival → average fill) and <b>opportunity</b> (the drift on what you never filled).</p>
+      <p>Implementation shortfall splits that into <b>delay</b> (decision → arrival), <b>execution</b> (arrival → average fill) and <b>opportunity</b> (the drift on what you never filled). <a href="#four-prices">§Four Prices</a> splits it once more, at every handover.</p>
     </div>
     <div class="cmds">
       <div class="code"><pre><span class="c">/ bench.q — arrival slippage, +bps = favourable</span>
@@ -2129,6 +2193,95 @@ P61           TSLA S    1        -1.424711
 P78           AMZN B    1        0.1879276
 q)select wAvg:fillRate wavg slipBps from arrival[]   <span class="c">/ book-level</span></pre></div>
     </div>
+  </div>
+
+  <div id="four-prices" class="shard-note"><a id="shortfall4" style="position:absolute" aria-hidden="true"></a>
+    <div class="note-title">Four Prices, Four Costs</div>
+    <p>B1's shortfall has one starting price. EDHEC's survey<sup><a href="#ref-edhec">9</a></sup> uses four, each stamped at a moment someone handed the order on, so the cost can be charged to whoever held it. The portfolio manager decides at \(P_0\). The desk releases the order to the broker at \(P_R\). The broker starts working it at \(P_S\). Trading ends at \(P_T\). Each gap is a different person's cost: <b>operational delay</b> (\(P_0\to P_R\)) belongs to the desk's workflow, <b>timing</b> (\(P_R\to P_S\)) to the broker's queue, <b>spread and impact</b> (\(P_S\to\bar P\)) to the execution, and <b>opportunity</b> (\(P_S\to P_T\) on the shares never filled) to whoever set the limit or cancelled.</p>
+    <figure style="margin:10px 0"><div class="fig">
+<svg viewBox="0 0 960 400" role="img" aria-label="One buy order on a single price path. The decision is taken at P zero; the price drifts up before the order reaches the broker at P R, and a little more before the broker starts working it at P S. The fills then lift the price further, each one taking liquidity off the book, so the average fill lands well above P S. The price keeps rising to P T at the end. The gap from P zero to the average fill splits into operational delay, timing, and spread plus impact; the unfilled shares are charged the move from P S to P T as opportunity cost.">
+  <defs><marker id="fp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+  <line x1="60" y1="350" x2="905" y2="350" stroke="var(--muted)" stroke-width="1.1" marker-end="url(#fp)"/>
+  <line x1="60" y1="350" x2="60" y2="30" stroke="var(--muted)" stroke-width="1.1" marker-end="url(#fp)"/>
+  <text x="66" y="40" font-family="Schibsted Grotesk,sans-serif" font-size="11" fill="var(--muted)">price</text>
+  <text x="905" y="368" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="10.5" fill="var(--muted)">t</text>
+  <!-- guides from each price to the brackets -->
+  <g stroke="var(--line)" stroke-width="1" stroke-dasharray="3 3">
+    <line x1="110" y1="270" x2="795" y2="270"/><line x1="330" y1="235" x2="795" y2="235"/>
+    <line x1="400" y1="222" x2="795" y2="222"/><line x1="470" y1="150" x2="795" y2="150"/>
+    <line x1="760" y1="118" x2="795" y2="118"/></g>
+  <!-- the mid, stepping -->
+  <path d="M60,272 H110 V262 H150 V276 H190 V258 H230 V266 H270 V246 H310 V238 H330 V235 H370 V228 H400 V222 H440 V214 H480 V200 H520 V188 H560 V178 H600 V170 H640 V160 H680 V140 H720 V126 H760 V118 H800 V124 H860 V120" fill="none" stroke="var(--s0)" stroke-width="1.8"/>
+  <!-- fills -->
+  <g fill="var(--sig)"><circle cx="476" cy="194" r="3.2"/><circle cx="500" cy="186" r="3.2"/><circle cx="530" cy="166" r="3.2"/><circle cx="555" cy="158" r="3.2"/><circle cx="585" cy="150" r="3.2"/><circle cx="615" cy="142" r="3.2"/><circle cx="636" cy="134" r="3.2"/></g>
+  <text x="560" y="214" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--sig)">fills, each above the mid</text>
+  <!-- the book at one fill -->
+  <text x="300" y="58" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="11" font-weight="600" fill="var(--fg)">the book at one fill</text>
+  <rect x="275" y="66" width="50" height="120" rx="3" fill="var(--sheet)" stroke="var(--muted)" stroke-width="1"/>
+  <g stroke="var(--line)"><line x1="275" y1="90" x2="325" y2="90"/><line x1="275" y1="114" x2="325" y2="114"/><line x1="275" y1="138" x2="325" y2="138"/><line x1="275" y1="162" x2="325" y2="162"/></g>
+  <rect x="276" y="139" width="48" height="46" fill="var(--s0-bg)" stroke="var(--s0)" stroke-width="1.2"/>
+  <text x="300" y="167" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="12" font-weight="600" fill="var(--s0)">V</text>
+  <text x="333" y="80" font-family="Schibsted Grotesk,sans-serif" font-size="10" fill="var(--muted)">asks</text>
+  <line x1="268" y1="186" x2="268" y2="139" stroke="var(--fg)" stroke-width="1"/><line x1="264" y1="186" x2="272" y2="186" stroke="var(--fg)"/><line x1="264" y1="139" x2="272" y2="139" stroke="var(--fg)"/>
+  <text x="258" y="160" text-anchor="end" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--fg)">immediacy:</text>
+  <text x="258" y="173" text-anchor="end" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--fg)">mid to the price V paid</text>
+  <path d="M330,175 Q420,190 520,186" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="2 3" marker-end="url(#fp)"/>
+  <!-- price labels -->
+  <text x="106" y="288" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="11.5" fill="var(--fg)">P<tspan baseline-shift="sub" font-size="8.5">0</tspan></text>
+  <text x="326" y="252" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="11.5" fill="var(--fg)">P<tspan baseline-shift="sub" font-size="8.5">R</tspan></text>
+  <text x="404" y="242" font-family="JetBrains Mono,monospace" font-size="11.5" fill="var(--fg)">P<tspan baseline-shift="sub" font-size="8.5">S</tspan></text>
+  <text x="470" y="144" font-family="JetBrains Mono,monospace" font-size="11.5" fill="var(--sig)">P̄ (avg fill)</text>
+  <text x="756" y="110" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="11.5" fill="var(--fg)">P<tspan baseline-shift="sub" font-size="8.5">T</tspan></text>
+  <!-- time markers -->
+  <g stroke="var(--muted)" stroke-width="1"><line x1="110" y1="350" x2="110" y2="276" marker-end="url(#fp)"/><line x1="330" y1="350" x2="330" y2="241" marker-end="url(#fp)"/><line x1="400" y1="350" x2="400" y2="228" marker-end="url(#fp)"/><line x1="760" y1="350" x2="760" y2="124" marker-end="url(#fp)"/></g>
+  <line x1="470" y1="356" x2="640" y2="356" stroke="var(--sig)" stroke-width="2"/>
+  <text x="110" y="372" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="11" fill="var(--fg)">decision</text>
+  <text x="330" y="372" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="11" fill="var(--fg)">release</text>
+  <text x="330" y="386" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="9.5" fill="var(--muted)">parent arrives</text>
+  <text x="404" y="372" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="11" fill="var(--fg)">start</text>
+  <text x="404" y="386" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="9.5" fill="var(--muted)">algo arrives</text>
+  <text x="555" y="372" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="11" fill="var(--sig)">fills</text>
+  <text x="760" y="372" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="11" fill="var(--fg)">end</text>
+  <!-- brackets -->
+  <g stroke="var(--fg)" stroke-width="1.2" fill="none">
+    <path d="M800,270 h6 V235 h-6"/><path d="M800,235 h6 V222 h-6"/><path d="M800,222 h6 V150 h-6"/></g>
+  <path d="M780,222 h-5 V118 h5" fill="none" stroke="var(--bad)" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="814" y="256" font-family="Schibsted Grotesk,sans-serif" font-size="11" fill="var(--fg)">operational delay</text>
+  <text x="814" y="233" font-family="Schibsted Grotesk,sans-serif" font-size="11" fill="var(--fg)">timing</text>
+  <text x="814" y="183" font-family="Schibsted Grotesk,sans-serif" font-size="11" fill="var(--fg)">spread + impact</text>
+  <text x="814" y="196" font-family="Schibsted Grotesk,sans-serif" font-size="9.5" fill="var(--muted)">on filled shares</text>
+  <text x="814" y="104" font-family="Schibsted Grotesk,sans-serif" font-size="11" fill="var(--bad)">opportunity</text>
+  <text x="814" y="117" font-family="Schibsted Grotesk,sans-serif" font-size="9.5" fill="var(--muted)">P<tspan baseline-shift="sub" font-size="8.5">S</tspan> → P<tspan baseline-shift="sub" font-size="8.5">T</tspan>, unfilled shares</text>
+  <text x="814" y="296" font-family="Schibsted Grotesk,sans-serif" font-size="11" font-weight="600" fill="var(--fg)">IS = the four, summed</text>
+</svg>
+    </div>
+    <figcaption>One buy, four handovers. The book at a fill shows where immediacy is paid: the fill takes size <i>V</i> off the ask side, and the gap from the mid to what <i>V</i> cost is the spread plus impact of that slice. Summed over the fills it is the execution cost; the other three brackets happen before or around it.</figcaption></figure>
+    <p>This stack has all four prices already. \(P_R\) is the parent's <code>arrivalMid</code>; \(P_S\) is its algo orders' <code>arrivalMid</code>, weighted by their size; \(P_T\) is the close. The decision is the one price a TCA system never sees, because it happens in the PM's head, so here it is the mid five seconds before the parent arrived. In the simulator the parent and its algo orders arrive on the same tick, so timing is zero; in a real desk, where an order can sit in an OMS queue for minutes, it often is not.</p>
+    <div class="code"><pre><span class="c">/ ── four prices, four costs ──────────────────────────────────────────────</span>
+<span class="c">/ Perold's shortfall split at the four moments EDHEC names: the decision (P0,</span>
+<span class="c">/ the mid lag before the parent arrived), the desk's release to the broker (PR,</span>
+<span class="c">/ the parent's arrivalMid), the broker starting work (PS, the qty-weighted</span>
+<span class="c">/ arrivalMid of its algo orders) and the end (PT). + = favourable, all in bps of P0.</span>
+<span class="c">/ ops + timing are charged on every share, execution on the filled ones and</span>
+<span class="c">/ opportunity on the unfilled ones; the four always sum to Perold's total, isBps.</span>
+.b.shortfall4:{[parent;algoOrd;execs;quote;lag;closes]
+  a:.b.arrival[parent;execs];
+  d:aj[`sym`time; select sym, time:arrivalTime-lag from a; select time,sym,bid,ask from quote];
+  a:update decisionMid:0.5*d[`bid]+d`ask from a;
+  a:a lj select startMid:qty wavg arrivalMid by parentOrderID from algoOrd;
+  a:update phi:.b.buyorsell side, endPx:closes sym from a;
+  a:update opsBps:1e4*phi*(decisionMid-arrivalMid)%decisionMid,
+           timingBps:1e4*phi*(arrivalMid-startMid)%decisionMid,
+           execBps:?[fillRate&gt;0; fillRate*1e4*phi*(startMid-averageFillPrice)%decisionMid; 0f],
+           oppBps:(1-fillRate)*1e4*phi*(startMid-endPx)%decisionMid,
+           isBps:(?[fillRate&gt;0; fillRate*1e4*phi*(decisionMid-averageFillPrice)%decisionMid; 0f])
+                 +(1-fillRate)*1e4*phi*(decisionMid-endPx)%decisionMid from a;
+  select parentOrderID, sym, side, fillRate, decisionMid, arrivalMid, startMid, averageFillPrice,
+    endPx, opsBps, timingBps, execBps, oppBps, isBps from a };
+
+q)select n:count i, ops:avg opsBps, timing:avg timingBps, exec:avg execBps, opp:avg oppBps,
+    total:avg isBps, maxGap:max abs isBps-opsBps+timingBps+execBps+oppBps from shortfall4[]</pre></div>
+    <p class="notice"><code>maxGap</code> is the check that the decomposition is honest: the four parts must sum to Perold's total for every parent, or one of them is double-counting. EDHEC charges delay only on the filled shares; this version charges it on every share and measures opportunity from \(P_S\) instead of \(P_0\). Both sum to the same total.</p>
   </div>
 
   <!-- B2 -->
@@ -2422,6 +2575,21 @@ q)select n:count i, costBps:avg costBps, modelBps:fitC*avg pred by sizeBucket:5 
 
 q)costCurve fitC                                 <span class="c">/ one row per bucket: pctADV, costBps ± se, modelBps</span></pre></div>
     <p>Read it the way you read a markout curve: the points, not the line. If the realised points bend up faster than the model at the large end, your big orders are paying more than their size explains, which usually means they are being worked too fast. And the error bars matter, because the top bucket has the fewest orders and the most noise.</p>
+    <h4 id="istar" style="margin-top:18px">A second model: I-star</h4>
+    <p>The square-root law has one constant. Kissell and Glantz's <b>I-star</b> model, which EDHEC works through in detail,<sup><a href="#ref-edhec">9</a></sup> has two parts. The <i>instantaneous</i> impact is what the whole order would cost if it hit the market at once, a power function of size and volatility. How much of it you actually pay then depends on how slowly you trade: about 95% of it is temporary and fades if you participate gently, and 5% is permanent and stays whatever you do.</p>
+    \[ I_{\text{bps}} = a_1\,Z^{a_2}\,\sigma^{a_3},\qquad \text{cost}_{\text{bps}} = I\left(0.95\,\eta^{-1} + 0.05\right),\qquad \eta = 1+\frac{0.5}{\text{POV}} \]
+    <p>Here \(Z\) is size as a percentage of ADV, \(\sigma\) daily volatility in bps, and POV the order's share of market volume while it trades. The fitted values below are EDHEC's, from Kissell and Glantz's data; refit them to your own flow before trusting them. The check reproduces EDHEC's worked example: 100,000 shares, 10% of ADV, 200 bps volatility, over a whole day.</p>
+    <div class="code"><pre><span class="c">/ ── I-star: Kissell and Glantz's impact model ────────────────────────────</span>
+<span class="c">/ Instantaneous impact I = a1 * Z^a2 * sigma^a3 (bps), Z = size as % of ADV,</span>
+<span class="c">/ sigma = daily volatility in bps; about 95% of it is temporary and fades with</span>
+<span class="c">/ slower trading. pov = order size / market volume over the horizon, so the</span>
+<span class="c">/ participation number eta = 1 + 0.5/pov. Defaults: EDHEC's power-function fit.</span>
+.b.istar:{[Z;sigmaBps;pov]
+  i:25*(Z xexp 0.38)*sigmaBps xexp 0.28;
+  i*0.05+0.95%1+0.5%pov };
+
+q).b.istar[10f;200f;100000%950000]        <span class="c">/ 56.9 bps: EDHEC's €17,070 on €3m</span></pre></div>
+    <p>The two models disagree on purpose. Square-root says cost depends on size; I-star says it depends on size <i>and</i> on how fast you go, which is what lets a pre-trade tool price a VWAP schedule and a 10% POV schedule differently for the same order.</p>
     <p>Two cautions. Realised cost against arrival also carries drift that would have happened without you, so the fit is an upper bound on what you caused unless you remove the market's move first (<a href="#lab-f6">F6</a>). And the per-fill <i>price impact</i> in <a href="#lab-c2">C2</a> is a different number. It is the mid's move after a single fill, and it mixes your impact with adverse selection; one fill's worth of evidence cannot separate them.</p>
   </div>
 
@@ -2568,7 +2736,7 @@ q)key `:log/sym
 <section class="part" id="labs-advanced"><a id="beyond" style="position:absolute" aria-hidden="true"></a>
   <h2>Labs — Beyond Vanilla TCA</h2>
   <p class="lead">Arrival, VWAP and markouts are table stakes. The techniques below are what separates a desk's analytics from a spreadsheet — drawn from how practitioners actually do it: Talos on robust arrival and fee-aware, limit-aware benchmarks; Chris Sparrow on the two-dimensional PWP range; OneTick on point-in-time latency bands; ICE on scoring where there is no tape; and the live exceptions, venue mix, best-execution report and audit trail every vendor TCA ships. Each is a few lines of q because each is, underneath, a sort or an <code>aj</code>.</p>
-  <p class="notice">These live in <code>beyond.q</code>, which <code>engine.q</code> loads after <code>bench.q</code>; nothing in the core library depends on them. Each has a wrapper at the TCA prompt — <code>robust[]</code>, <code>fees[]</code>, <code>cohorts[]</code>, <code>limited[]</code>, <code>pwp[]</code>, <code>bands[]</code>, <code>context[]</code>, <code>peers[]</code>, <code>exceptions[]</code>, <code>venueMix[]</code>, <code>top5[]</code>, <code>audit</code>, <code>brokerReport[]</code> — and every output below is from a live run of this stack.</p>
+  <p class="notice">These live in <code>beyond.q</code>, which <code>engine.q</code> loads after <code>bench.q</code>; nothing in the core library depends on them. Each has a wrapper at the TCA prompt — <code>robust[]</code>, <code>fees[]</code>, <code>cohorts[]</code>, <code>limited[]</code>, <code>pwp[]</code>, <code>bands[]</code>, <code>context[]</code>, <code>peers[]</code>, <code>exceptions[]</code>, <code>venueMix[]</code>, <code>top5[]</code>, <code>audit</code>, <code>brokerReport[]</code>, <code>dayBench[]</code> — and every output below is from a live run of this stack.</p>
 
   <!-- F1 -->
   <div class="lab" id="lab-f1">
@@ -3029,6 +3197,40 @@ q)select n:count i, priceImpr:avg priceImprBps, vsDayVwap:avg vsDayVwapBps,
     </div>
   </div>
 
+  <!-- F13 -->
+  <div class="lab" id="lab-f13"><a id="yardsticks" style="position:absolute" aria-hidden="true"></a>
+    <div class="notes">
+      <h3><span class="n">F13</span>The Rest of the Yardsticks</h3>
+      <div class="where">Run in <span class="tag tsh">TCA</span><span class="tag tany">CTRL</span></div>
+      <p>EDHEC sorts every benchmark two ways: <b>when</b> it is fixed (before, during or after the trade) and <b>whether it depends on the time of the trade</b>. Six are still common in client reports, and none had a function here until now: yesterday's close, the open, the <b>available VWAP</b> (open to arrival, nothing after), <b>LHOC</b> (the mean of the day's low, high, open and close), the high–low midpoint, and the close.</p>
+      <p>The first three were knowable when the order arrived; the last three know the whole day, so they score a trader on information the trader did not have. The available VWAP reuses the running sums from <a href="#pr-vwap">§Production Notes</a>: one <code>aj</code> at each parent's arrival.</p>
+      <p class="notice">With one simulated session there is no yesterday, so the wrapper passes <code>refPx</code>, the feed's anchor prices, as the previous close. On a real desk that is the prior day's close from the HDB.</p>
+    </div>
+    <div class="cmds">
+      <div class="code"><pre><span class="c">/ ── the rest of the yardsticks ───────────────────────────────────────────</span>
+<span class="c">/ The day-level benchmarks a report still shows, against each parent's average</span>
+<span class="c">/ fill: yesterday's close, the open, the VWAP available at arrival (open to</span>
+<span class="c">/ arrival, nothing after), LHOC (mean of low, high, open, close), the high-low</span>
+<span class="c">/ midpoint, and the close. + = favourable. Only the first three were knowable</span>
+<span class="c">/ when the order arrived; the rest carry hindsight.</span>
+.b.dayBench:{[parent;execs;trade;prevCl]
+  a:select parentOrderID, sym, side, time:arrivalTime, averageFillPrice from .b.arrival[parent;execs] where filled&gt;0;
+  c:update cn:sums px*size, cv:sums size by sym from select time,sym,px,size from trade;
+  a:aj[`sym`time; a; select sym,time,cn,cv from c];
+  a:a lj select open:first px, high:max px, low:min px, close:last px by sym from trade;
+  a:update phi:.b.buyorsell side, prevClose:prevCl sym, availVwap:cn%cv,
+           lhoc:0.25*low+high+open+close, midHL:0.5*high+low from a;
+  f:{[phi;b;p] 1e4*phi*(b-p)%b};
+  select parentOrderID, sym, side, averageFillPrice,
+    vsPrevClose:f[phi;prevClose;averageFillPrice], vsOpen:f[phi;open;averageFillPrice],
+    vsAvailVwap:f[phi;availVwap;averageFillPrice], vsLHOC:f[phi;lhoc;averageFillPrice],
+    vsMidHL:f[phi;midHL;averageFillPrice], vsClose:f[phi;close;averageFillPrice] from a };
+
+q)select n:count i, prevClose:avg vsPrevClose, open:avg vsOpen, availVwap:avg vsAvailVwap,
+    lhoc:avg vsLHOC, midHL:avg vsMidHL, close:avg vsClose by side from dayBench[]</pre></div>
+    </div>
+  </div>
+
 </section>
 
 <!-- ───────────── THE ALGO WHEEL ───────────── -->
@@ -3225,7 +3427,7 @@ sizeK   -0.1246076  0.1000023  -1.246047 -0.01317544 0.00787961</pre></div>
 
 <!-- ───────────── MISTAKES ───────────── -->
 <section class="part" id="mistakes">
-  <h2>Eleven Ways to Get This Wrong</h2>
+  <h2>Twelve Ways to Get This Wrong</h2>
   <p class="lead">These are scattered through the labs as warnings; collected here they make a checklist. Every one of them produces a number that is arithmetically correct and practically false — which is what makes them durable. None is hypothetical.</p>
   <div class="mistakes"><div class="mistake"><div class="mn">01</div><div><h4>Using VWAP as the only benchmark</h4><p>It asks whether you traded like everyone else, not whether you traded well. An order that is half the volume in a name <i>is</i> the VWAP, and beats it by construction. Pair it with arrival or it flatters your biggest orders most.</p></div></div>
     <div class="mistake"><div class="mn">02</div><div><h4>Quoting slippage without fill rate</h4><p>+4 bps on 20% filled is a worse outcome than −1 bps on 98%, and the first number looks better in every report. <code>fillRate</code> belongs in the same <code>select</code>, every time.</p></div></div>
@@ -3237,7 +3439,8 @@ sizeK   -0.1246076  0.1000023  -1.246047 -0.01317544 0.00787961</pre></div>
     <div class="mistake"><div class="mn">08</div><div><h4>Mixing marketable and limited orders</h4><p>A buy limited at $100 could never have traded through $100, so the prints above it don't belong in its benchmark. Scoring a limited order against the full-window VWAP compares it to a market it was never in.</p></div></div>
     <div class="mistake"><div class="mn">09</div><div><h4>Reconstructing book state afterwards</h4><p>Spread, depth and queue position at the moment of placement are not recoverable from history — the book has moved on and your own order is gone from it. Stamp them on the <code>ord</code> row in-band or lose them.</p></div></div>
     <div class="mistake"><div class="mn">10</div><div><h4>Breaking point-in-time correctness</h4><p>Score a 10:00:00 fill against a 10:00:02 mid and you have smuggled two seconds of hindsight into the number. In kdb+ this is the difference between <code>aj</code> and an ordinary join, and it is silent.</p></div></div>
-    <div class="mistake"><div class="mn">11</div><div><h4>Counting every print in VWAP</h4><p>A real tape carries odd lots, opening and closing auction prints, out-of-sequence reports and late trades, each flagged with a condition code. Leave them in and your VWAP includes trades you could never have joined; the auction print alone can be a fifth of the day. Filter on an eligibility flag set once at ingest (<a href="#pr-vwap">§Production Notes</a>). This stack's synthetic tape has no conditions, which is exactly why the mistake is easy to carry into production.</p></div></div></div>
+    <div class="mistake"><div class="mn">11</div><div><h4>Counting every print in VWAP</h4><p>A real tape carries odd lots, opening and closing auction prints, out-of-sequence reports and late trades, each flagged with a condition code. Leave them in and your VWAP includes trades you could never have joined; the auction print alone can be a fifth of the day. Filter on an eligibility flag set once at ingest (<a href="#pr-vwap">§Production Notes</a>). This stack's synthetic tape has no conditions, which is exactly why the mistake is easy to carry into production.</p></div></div>
+    <div class="mistake"><div class="mn">12</div><div><h4>Adding up the children's spreads</h4><p>Each child's effective spread is measured against the mid at its own fill, and that mid has already been pushed up by the children before it. Sum them and the parent looks cheap: every slice paid a fair spread on a price the order itself had moved. A parent's cost is measured from one price, the arrival mid, across all its fills (<a href="#lab-b1">B1</a>), never as the sum of its children's.</p></div></div></div>
 </section>
 
 <!-- ───────────── PRODUCTION ───────────── -->
