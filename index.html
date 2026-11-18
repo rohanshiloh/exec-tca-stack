@@ -396,6 +396,7 @@ mjx-container svg{max-width:100%}
   <!-- arrival mid reference line -->
   <line x1="92" y1="250" x2="792" y2="250" stroke="var(--accent)" stroke-width="1.2" stroke-dasharray="5 4"/>
   <text x="88" y="254" text-anchor="end" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--accent)">arrival mid</text>
+<text x="88" y="268" text-anchor="end" fill="var(--accent)"><tspan font-family="Georgia,serif" font-style="italic" font-size="12">P</tspan><tspan font-family="Georgia,serif" font-size="8.5" dy="3">arr</tspan></text>
   <!-- fills lifting the ask -->
   <g fill="var(--sig)">
     <circle cx="220" cy="223" r="4"/><circle cx="320" cy="204" r="4"/><circle cx="430" cy="183" r="4"/>
@@ -403,10 +404,10 @@ mjx-container svg{max-width:100%}
   </g>
   <text x="300" y="250" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--sig)">fills lift the ask →</text>
   <!-- avg mid during fills + average fill price -->
-  <line x1="200" y1="150" x2="792" y2="150" stroke="var(--muted)" stroke-width="1" stroke-dasharray="2 3"/>
-  <line x1="200" y1="136" x2="792" y2="136" stroke="var(--sig)" stroke-width="1.4"/>
-  <text x="196" y="140" text-anchor="end" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--sig)">average fill price</text>
-  <text x="196" y="153" text-anchor="end" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--muted)">avg mid</text>
+  <line x1="144" y1="150" x2="792" y2="150" stroke="var(--muted)" stroke-width="1" stroke-dasharray="2 3"/>
+  <line x1="144" y1="136" x2="792" y2="136" stroke="var(--sig)" stroke-width="1.4"/>
+  <text x="139" y="140" text-anchor="end" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--sig)">average fill price  <tspan font-family="Georgia,serif" font-style="italic" font-size="12">P̄</tspan><tspan font-family="Georgia,serif" font-size="8.5" dy="3">fill</tspan></text>
+  <text x="139" y="154" text-anchor="end" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--muted)">avg mid  <tspan font-family="Georgia,serif" font-style="italic" font-size="12">M̄</tspan></text>
   <!-- decomposition brackets -->
   <g stroke-width="1.4" fill="none">
     <path d="M805 250 H813 M805 150 H813 M813 250 V150" stroke="var(--bad)"/>
@@ -421,7 +422,7 @@ mjx-container svg{max-width:100%}
 </svg>
     </div>
     <div class="eq" style="text-align:center;margin:2px 0">\[ \underbrace{\bar P_{\text{fill}}-P_{\text{arr}}}_{\text{implementation shortfall}}\;=\;\underbrace{\bar P_{\text{fill}}-\bar M}_{\text{spread — visible}}\;+\;\underbrace{\bar M-P_{\text{arr}}}_{\text{drift / impact — invisible}} \]</div>
-    <figcaption><b>One buy, worked over time.</b> The quoted band drifts up as the order trades; each fill lifts the ask. Measured against the arrival mid, the realised cost splits in two: the half-spread crossed on every fill — small and visible — and the drift of the mid itself while you worked, <span style="font-variant-caps:normal"><code>M̄ − arrival mid</code></span> — usually larger, and invisible unless you measure it. Most of TCA is about that second part. What the price does <i>after</i> the last fill is the other half of the story: if it falls back, the move was temporary impact you paid for; if it stays, it was information. <a href="#fig-markouts">The markout curves</a> pick up exactly where this figure stops.</figcaption>
+    <figcaption><b>One buy, worked over time.</b> The quoted band drifts up as the order trades; each fill lifts the ask (a sell drops the bid the same way). In the equation, \(\bar P_{\text{fill}}\) is the average price across all the fills, \(P_{\text{arr}}\) the mid when the order arrived, and \(\bar M\) the average mid at the moments of those fills. It is written in price for a buy, so positive means cost; the code signs it the <a href="#signed-bps">other way</a>. Measured against the arrival mid, the realised cost splits in two: the half-spread crossed on every fill — small and visible — and the drift of the mid itself while you worked, <span style="font-variant-caps:normal"><code>M̄ − arrival mid</code></span> — usually larger, and invisible unless you measure it. Most of TCA is about that second part. What the price does <i>after</i> the last fill is the other half of the story: if it falls back, the move was temporary impact you paid for; if it stays, it was information. <a href="#fig-markouts">The markout curves</a> pick up exactly where this figure stops.</figcaption>
   </figure>
   <p>That drift has sharper names you'll meet later — <i>market impact</i> (the move you cause), <i>adverse selection</i> and venue <i>toxicity</i> (trading right before the price moves against you) — but they are all the same plain idea: the price you end up with is worse than the price you first saw. The whole stack exists to pin down how much worse, and why.</p>
   <p>Those four names get conflated constantly, including by people who should know better. They are different phenomena with different causes, and the fix for each is different:</p>
