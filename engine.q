@@ -49,6 +49,7 @@ upd:{[t;x] t insert x;
 HORIZONS:0D00:00:01 0D00:00:10 0D00:01:00;
 arrival:{ .b.arrival[parent;execs] };
 vwap:{ .b.ivwap[parent;trade;execs] };
+vwapFast:{ .b.ivwapFast[trade;execs] };
 markouts:{ .b.markout[execs;quote;HORIZONS] };
 scorecard:{ .b.scorecard markouts[] };
 spreads:{ .b.spreads[execs;quote;0D00:00:10] };

@@ -18,6 +18,9 @@ tcaQueries:(
   "ofi[]";
   "5#vwap[]";
   "select n:count i, avgSlip:avg slipBps, medSlip:med slipBps by side from vwap[]";
+  "select n:count i, maxDiff:max abs vwap-vwapF from vwap[] lj 1!select parentOrderID, vwapF:vwap from vwapFast[]";
+  "\\t vwap[]";
+  "\\t vwapFast[]";
   "5#pov[]";
   "select n:count i, avgPov:avg pov, medPov:med pov, maxPov:max pov from pov[]";
   "closes[]";
@@ -60,6 +63,11 @@ tcaQueries:(
   ".b.twap[quote;`NVDA; min quote`time; max quote`time]";
   ".b.closePx[trade]";
   ".b.pretrade[0.5; 0.018; 200000; 4000000]";
+  "sq:select adv:sum size, sigma:dev 1_deltas log px by sym from trade";
+  "a:select parentOrderID,sym,costBps:neg slipBps,Q:filled from arrival[] where filled>0";
+  "a:update pred:1e4*sigma*sqrt Q%adv from a lj sq";
+  "fitC:(sum a[`pred]*a`costBps)%sum a[`pred]*a`pred";
+  "select n:count i, costBps:avg costBps, modelBps:fitC*avg pred by sizeBucket:5 xrank Q from a";
   "select averageBps:avg bps, medBps:med bps, clampedBps:avg .b.winsor[bps;-25f;25f], n:count i by venue from markouts[]";
   "\\t do[20; scorecard[]]";
   "tcaLog[]";

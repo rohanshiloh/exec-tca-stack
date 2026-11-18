@@ -61,6 +61,19 @@ ivwap:{[parent;trade;execs]
   vw:f'[sp`sym; sp`startTime; sp`endTime];
   update vwap:vw, slipBps:1e4*.b.buyorsell[side]*(vw-averageFillPrice)%vw from sp };
 
+/ the same VWAP from running sums: two aj's instead of one tape scan per parent.
+/ Keep cumulative notional and volume per sym; the VWAP over [s;e] is the change
+/ in both between e and the instant before s (Earley, KX white paper).
+ivwapFast:{[trade;execs]
+  sp:0!select startTime:min time, endTime:max time, averageFillPrice:(sum lastPx*lastQty)%sum lastQty
+       by parentOrderID, sym, side from execs where execType="F";
+  c:update cn:sums px*size, cv:sums size by sym from select time,sym,px,size from trade;
+  c:select sym,time,cn,cv from c;
+  e:aj[`sym`time; select sym, time:endTime+.b.tapeLag from sp; c];       / sums at the end
+  s:aj[`sym`time; select sym, time:startTime-0D00:00:00.000000001 from sp; c];  / just before start
+  vw:((0^e`cn)-0^s`cn)%(0^e`cv)-0^s`cv;                                    / 0%0 -> 0n: no prints
+  update vwap:vw, slipBps:1e4*.b.buyorsell[side]*(vw-averageFillPrice)%vw from sp };
+
 / TWAP: mean mid over the same window (equal 100ms spacing ≈ time-weighted).
 twap:{[quote;sy;s;e] q:select bid,ask from quote where sym=sy, time within (s;e);
   $[count q; avg 0.5*q[`bid]+q`ask; 0n] };
@@ -82,7 +95,7 @@ scorecard:{[mk] 0!select numberOfFills:count i, shares:sum lastQty, averageBps:a
 
 / ── effective / realised spread, and price impact ───────────────────────
 / effective = cost vs mid AT the fill; realised = cost vs mid h later;
-/ impact = effective - realised (the part the market took back).
+/ impact = effective - realised (how far the mid moved our way and stayed).
 / NOTE: these three follow the standard microstructure convention, POSITIVE = COST
 / PAID — the opposite of arrival/markout above, where positive = favourable.
 spreads:{[execs;quote;h]

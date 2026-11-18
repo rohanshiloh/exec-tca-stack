@@ -520,7 +520,8 @@ mjx-container svg{max-width:100%}
       <tr><td>Markout</td><td>The mid a fixed interval <i>after</i> each fill, versus the fill price.</td><td>−1.97 bps at 60s.</td><td><code>.b.markout</code></td><td>Reading one horizon. The shape across horizons is the signal.</td></tr>
       <tr><td>Effective spread</td><td>2φ(fill − mid at the fill): what immediacy cost you.</td><td>1.1 bps on a touch cross.</td><td><code>.b.spreads</code> → <code>effectiveBps</code></td><td>Forgetting this one is signed <b>positive = cost</b>, unlike the rest.</td></tr>
       <tr><td>Realised spread</td><td>The same, measured h later: what you kept.</td><td>0.3 bps at 60s.</td><td><code>.b.spreads</code> → <code>realisedBps</code></td><td>Comparing venues at different horizons.</td></tr>
-      <tr><td>Price impact</td><td>Effective minus realised — the part the market took back.</td><td>1.1 − 0.3 = 0.8 bps.</td><td><code>effectiveBps-realisedBps</code></td><td>Calling adverse selection “impact”. You caused one, not the other.</td></tr>
+      <tr><td>Market impact</td><td>How far your own trading moves the price. Part fades once you stop (temporary); part stays, because your trading revealed information (permanent).</td><td>Buying 200,000 of a name that trades 4M a day: roughly 20 bps by the square-root law.</td><td>caused by <code>impD</code> in the feed; predicted by <code>.b.pretrade</code>; measured per fill by <code>spreads[]</code></td><td>Blaming every adverse move on yourself. Some of it was drift the market was making anyway, some was a counterparty who knew more.</td></tr>
+      <tr><td>Price impact</td><td>The per-fill measure: effective minus realised, which is how far the mid moved your way after the fill and stayed there.</td><td>1.1 − 0.3 = 0.8 bps.</td><td><code>effectiveBps-realisedBps</code></td><td>Reading it as pure market impact. The mid also moves when the other side knew something (adverse selection), and this number cannot tell the two apart.</td></tr>
       <tr><td>Adverse selection</td><td>Being filled right before the price moves against you.</td><td>passive fill, mid drops 2 bps in a second.</td><td>negative short-horizon <code>markout</code></td><td>Blaming the algo for what the counterparty knew.</td></tr>
       <tr><td>Toxicity</td><td>A venue's tendency to produce adversely-selected fills.</td><td>EDGX at −0.73 bps on 1s.</td><td><code>scorecard[]</code> by <code>venue</code>, <code>horizon</code></td><td>Ranking venues by fill rate instead — the toxic ones fill fastest.</td></tr>
       <tr><td>Maker / taker</td><td>Resting (adding) liquidity versus crossing to (removing) it.</td><td><code>liq="A"</code> vs <code>liq="R"</code>.</td><td>the fee model in Lab F2</td><td>Treating the rebate as income rather than the price of adverse selection.</td></tr>
@@ -1003,7 +1004,7 @@ system"t 100";                                 / drive the feed every 100ms
       </div>
     </details>
     <details class="srcfile" id="src-engine">
-      <summary><span class="fn">engine.q</span><span class="role">state + handlers + benchmark wrappers</span><span class="lc">97 lines</span></summary>
+      <summary><span class="fn">engine.q</span><span class="role">state + handlers + benchmark wrappers</span><span class="lc">98 lines</span></summary>
       <div class="body">
         <div class="desc">The core. Holds the live tables, keeps a <code>topMid</code> per sym, stamps arrival price on every parent at its <code>NEW</code>, folds fills into parent state, and exposes the no-argument benchmark wrappers. Loaded by both the live CEP and the replay path, so one code path serves real-time and batch.</div>
         <div class="code"><pre>/ exec-tca-stack : the TCA engine
@@ -1057,6 +1058,7 @@ upd:{[t;x] t insert x;
 HORIZONS:0D00:00:01 0D00:00:10 0D00:01:00;
 arrival:{ .b.arrival[parent;execs] };
 vwap:{ .b.ivwap[parent;trade;execs] };
+vwapFast:{ .b.ivwapFast[trade;execs] };
 markouts:{ .b.markout[execs;quote;HORIZONS] };
 scorecard:{ .b.scorecard markouts[] };
 spreads:{ .b.spreads[execs;quote;0D00:00:10] };
@@ -1106,7 +1108,7 @@ drivers:{ f:.b.wheelFeatures[parent;trade;execs;ord];
       </div>
     </details>
     <details class="srcfile" id="src-bench">
-      <summary><span class="fn">bench.q</span><span class="role">the TCA library (.b.*)</span><span class="lc">124 lines</span></summary>
+      <summary><span class="fn">bench.q</span><span class="role">the TCA library (.b.*)</span><span class="lc">137 lines</span></summary>
       <div class="body">
         <div class="desc">Pure functions, each taking the tables it needs explicitly: arrival/IS and shortfall, interval VWAP and TWAP, markouts, effective/realised spread, the venue scorecard, OFI, realised participation, the square-root pre-trade estimate, and the volume curve. Nothing here touches global state, so the same function runs inside the CEP and over a replayed HDB day.</div>
         <div class="code"><pre>/ exec-tca-stack : benchmark &amp; TCA library  (.b namespace, pure functions)
@@ -1172,6 +1174,19 @@ ivwap:{[parent;trade;execs]
   vw:f'[sp`sym; sp`startTime; sp`endTime];
   update vwap:vw, slipBps:1e4*.b.buyorsell[side]*(vw-averageFillPrice)%vw from sp };
 
+/ the same VWAP from running sums: two aj's instead of one tape scan per parent.
+/ Keep cumulative notional and volume per sym; the VWAP over [s;e] is the change
+/ in both between e and the instant before s (Earley, KX white paper).
+ivwapFast:{[trade;execs]
+  sp:0!select startTime:min time, endTime:max time, averageFillPrice:(sum lastPx*lastQty)%sum lastQty
+       by parentOrderID, sym, side from execs where execType="F";
+  c:update cn:sums px*size, cv:sums size by sym from select time,sym,px,size from trade;
+  c:select sym,time,cn,cv from c;
+  e:aj[`sym`time; select sym, time:endTime+.b.tapeLag from sp; c];       / sums at the end
+  s:aj[`sym`time; select sym, time:startTime-0D00:00:00.000000001 from sp; c];  / just before start
+  vw:((0^e`cn)-0^s`cn)%(0^e`cv)-0^s`cv;                                    / 0%0 -&gt; 0n: no prints
+  update vwap:vw, slipBps:1e4*.b.buyorsell[side]*(vw-averageFillPrice)%vw from sp };
+
 / TWAP: mean mid over the same window (equal 100ms spacing ≈ time-weighted).
 twap:{[quote;sy;s;e] q:select bid,ask from quote where sym=sy, time within (s;e);
   $[count q; avg 0.5*q[`bid]+q`ask; 0n] };
@@ -1193,7 +1208,7 @@ scorecard:{[mk] 0!select numberOfFills:count i, shares:sum lastQty, averageBps:a
 
 / ── effective / realised spread, and price impact ───────────────────────
 / effective = cost vs mid AT the fill; realised = cost vs mid h later;
-/ impact = effective - realised (the part the market took back).
+/ impact = effective - realised (how far the mid moved our way and stayed).
 / NOTE: these three follow the standard microstructure convention, POSITIVE = COST
 / PAID — the opposite of arrival/markout above, where positive = favourable.
 spreads:{[execs;quote;h]
@@ -1488,7 +1503,7 @@ bps:{ 0.01*floor 0.5+100*x };                 / round to 2dp for the eye
       </div>
     </details>
     <details class="srcfile" id="src-dump">
-      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">126 lines</span></summary>
+      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">134 lines</span></summary>
       <div class="body">
         <div class="desc"><code>\l dump.q</code> then <code>tcaDump[]</code> in the TCA tab runs every benchmark and writes the output to <code>tcaData.txt</code>. Each query is trapped, so one failure prints its error and the rest still run. The outputs in this document came from it.</div>
         <div class="code"><pre>/ exec-tca-stack : write TCA diagnostics to tcaData.txt
@@ -1511,6 +1526,9 @@ tcaQueries:(
   "ofi[]";
   "5#vwap[]";
   "select n:count i, avgSlip:avg slipBps, medSlip:med slipBps by side from vwap[]";
+  "select n:count i, maxDiff:max abs vwap-vwapF from vwap[] lj 1!select parentOrderID, vwapF:vwap from vwapFast[]";
+  "\\t vwap[]";
+  "\\t vwapFast[]";
   "5#pov[]";
   "select n:count i, avgPov:avg pov, medPov:med pov, maxPov:max pov from pov[]";
   "closes[]";
@@ -1553,6 +1571,11 @@ tcaQueries:(
   ".b.twap[quote;`NVDA; min quote`time; max quote`time]";
   ".b.closePx[trade]";
   ".b.pretrade[0.5; 0.018; 200000; 4000000]";
+  "sq:select adv:sum size, sigma:dev 1_deltas log px by sym from trade";
+  "a:select parentOrderID,sym,costBps:neg slipBps,Q:filled from arrival[] where filled&gt;0";
+  "a:update pred:1e4*sigma*sqrt Q%adv from a lj sq";
+  "fitC:(sum a[`pred]*a`costBps)%sum a[`pred]*a`pred";
+  "select n:count i, costBps:avg costBps, modelBps:fitC*avg pred by sizeBucket:5 xrank Q from a";
   "select averageBps:avg bps, medBps:med bps, clampedBps:avg .b.winsor[bps;-25f;25f], n:count i by venue from markouts[]";
   "\\t do[20; scorecard[]]";
   "tcaLog[]";
@@ -1754,7 +1777,7 @@ q)\\          <span class="c">/ or just exit</span></pre></div>
       <tr><td>Markout</td><td>aj[`sym`time; time+h; quote]</td><td>Was I picked off after I traded?</td><td>venue and toxicity analysis</td><td>needs clean quotes past the last fill</td></tr>
       <tr><td>Effective spread <span class="g">(+ = cost)</span></td><td>1e4*2*φ*(lastPx-mid0)%lastPx</td><td>What did immediacy cost me, right then?</td><td>microstructure, fee comparison</td><td>is not the total cost</td></tr>
       <tr><td>Realised spread <span class="g">(+ = cost)</span></td><td>1e4*2*φ*(lastPx-midh)%lastPx</td><td>How much of that did I keep?</td><td>venue quality</td><td>horizon-sensitive — pick one and stay there</td></tr>
-      <tr><td>Impact <span class="g">(+ = cost)</span></td><td>effectiveBps-realisedBps</td><td>How much did the market take back?</td><td>sizing and urgency</td><td>routinely confused with adverse selection</td></tr>
+      <tr><td>Impact <span class="g">(+ = cost)</span></td><td>effectiveBps-realisedBps</td><td>How far did the mid move after the fill, and stay?</td><td>sizing and urgency</td><td>routinely confused with adverse selection</td></tr>
       <tr><td>OFI</td><td>(sum db)-sum da</td><td>Which side has pressure right now?</td><td>placement context</td><td>context, not a forecast</td></tr>
       <tr><td>POV</td><td>executedQty%tapeVolume</td><td>How hard did I push?</td><td>schedule control</td><td>says nothing about execution quality</td></tr></tbody>
   </table></div>
@@ -2072,7 +2095,7 @@ horizon             | averageBps
     <div class="notes">
       <h3><span class="n">C2</span>Spread Capture &amp; the Scorecard</h3>
       <div class="where">Run in <span class="tag tsh">TCA</span></div>
-      <p>Effective spread is what you paid versus the mid at the fill; realised spread is what you kept once the mid moved a horizon later; the difference is <b>impact</b> — the part the market took back. All three are two <code>aj</code>s.</p>
+      <p>Effective spread is what you paid versus the mid at the fill; realised spread is the same cost measured against the mid a horizon later; the difference is <b>impact</b> — how far the mid moved your way after the fill and stayed there. All three are two <code>aj</code>s.</p>
       <p class="notice">The scorecard is the table the routing table should be reading: markout by venue and horizon, one <code>select … by</code>. It can be re-scored intraday, so the router is told before the damage compounds — not in next month's report.</p>
     </div>
     <div class="cmds">
@@ -2209,6 +2232,22 @@ INTL | 0.06308694 0.0728817  0.06240216 77160
 MLIT | 0.115352   0.08103068 0.1138717  105450
 NSDQ | 0.1815282  0.09261538 0.1812824  49620</pre></div>
     </div>
+  </div>
+
+  <div id="market-impact" class="shard-note"><a id="impact" style="position:absolute" aria-hidden="true"></a>
+    <div class="note-title">Market Impact: How Far You Move It</div>
+    <p>Every buy is a small piece of evidence that someone wants the stock. The book absorbs it by moving: the ask you lifted is gone, the next one is higher, and the participants watching the tape revise up. That move is <b>market impact</b>, and it is the one cost in the taxonomy that you cause rather than pay to someone. Part of it is <b>temporary</b>, liquidity that refills once you stop pushing, and part is <b>permanent</b>, because your trading told the market something. The markout curve in <a href="#lab-c1">C1</a> is where the split shows: the drop from the one-second to the one-minute markout is the temporary part going away.</p>
+    <p>The desk's model for its size is the <b>square-root law</b>: impact grows with volatility and with the square root of the order's share of the day's volume, not in proportion to it. Doubling the order raises the cost by about 40%, not 100%.</p>
+    \[ \text{impact}_{\text{bps}} \;\approx\; 10^{4}\cdot C\,\sigma\,\sqrt{\frac{Q}{\text{ADV}}} \]
+    <p>Here \(\sigma\) is daily volatility, \(Q\) the order size, ADV the average daily volume, and \(C\) a constant of order one that you fit to your own flow (<a href="#lab-d2">D2</a>). It describes a meta-order worked over the day, not a single fill, and it measures the move you would see <i>if nothing else happened</i>, which is never true. So test it on parents, not fills: bucket parents by size, and check that realised cost rises like the square root of size rather than like size itself.</p>
+    <div class="code"><pre><span class="c">/ per sym: the session's volume, and print-to-print volatility</span>
+<span class="c">/ (one synthetic session, so C absorbs the units)</span>
+q)sq:select adv:sum size, sigma:dev 1_deltas log px by sym from trade
+q)a:select parentOrderID,sym,costBps:neg slipBps,Q:filled from arrival[] where filled&gt;0
+q)a:update pred:1e4*sigma*sqrt Q%adv from a lj sq
+q)fitC:(sum a[`pred]*a`costBps)%sum a[`pred]*a`pred       <span class="c">/ least squares through the origin</span>
+q)select n:count i, costBps:avg costBps, modelBps:fitC*avg pred by sizeBucket:5 xrank Q from a</pre></div>
+    <p>Two cautions. Realised cost against arrival also carries drift that would have happened without you, so the fit is an upper bound on what you caused unless you remove the market's move first (<a href="#lab-f6">F6</a>). And the per-fill <i>price impact</i> in <a href="#lab-c2">C2</a> is a different number. It is the mid's move after a single fill, and it mixes your impact with adverse selection; one fill's worth of evidence cannot separate them.</p>
   </div>
 
   <!-- E1 -->
@@ -2860,7 +2899,7 @@ sizeK   -0.1246076  0.1000023  -1.246047 -0.01317544 0.00787961</pre></div>
 <!-- ───────────── PRODUCTION ───────────── -->
 <section class="part" id="production">
   <h2>Production Notes</h2>
-  <p class="lead">What changes when this stops being a lab. Four seams where the synthetic feed meets a real desk — each a short note, not a lab.</p>
+  <p class="lead">What changes when this stops being a lab. Five seams where the synthetic feed meets a real desk — each a short note, not a lab.</p>
   <div class="logmodes">
     <div id="pr-kafka">
       <h4>KAFKA INGEST</h4>
@@ -2874,6 +2913,25 @@ sizeK   -0.1246076  0.1000023  -1.246047 -0.01317544 0.00787961</pre></div>
       <h4>REAL TICK DATA</h4>
       <p>Swap the synthetic feed for a recorded day to sanity-check the benchmarks against prices you can look up. US tick/quote from <a href="https://polygon.io/pricing">Polygon</a> is enough to compute real interval VWAP, arrival mid and markouts in a sandbox before any venue is on the line.</p>
     </div>
+  </div>
+  <div id="pr-vwap" class="shard-note"><a id="vwap-fast" style="position:absolute" aria-hidden="true"></a>
+    <div class="note-title">Interval VWAP Without Scanning the Tape</div>
+    <p><code>.b.ivwap</code> filters the tape once per parent: clear and correct, but it does work proportional to parents × window length. On a full day of a real tape, the better shape is <b>running sums</b>. Keep cumulative notional \(\sum p\,v\) and cumulative volume \(\sum v\) per sym, look both up at the window's end and at the instant before its start with two <code>aj</code>s, and divide the differences. Each parent costs two binary searches, whatever its window. Earley's KX white paper<sup><a href="#ref-earley">8</a></sup> measured this at about ten times the speed of the equivalent <code>wj1</code>, using a small fraction of the memory.</p>
+    <div class="code"><pre><span class="c">/ bench.q — same answer as .b.ivwap, two as-of joins instead of a scan per parent</span>
+ivwapFast:{[trade;execs]
+  sp:0!select startTime:min time, endTime:max time, averageFillPrice:(sum lastPx*lastQty)%sum lastQty
+       by parentOrderID, sym, side from execs where execType="F";
+  c:update cn:sums px*size, cv:sums size by sym from select time,sym,px,size from trade;
+  c:select sym,time,cn,cv from c;
+  e:aj[`sym`time; select sym, time:endTime+.b.tapeLag from sp; c];       <span class="c">/ sums at the end</span>
+  s:aj[`sym`time; select sym, time:startTime-0D00:00:00.000000001 from sp; c];  <span class="c">/ just before start</span>
+  vw:((0^e`cn)-0^s`cn)%(0^e`cv)-0^s`cv;                                    <span class="c">/ 0%0 -&gt; 0n: no prints</span>
+  update vwap:vw, slipBps:1e4*.b.buyorsell[side]*(vw-averageFillPrice)%vw from sp };
+
+q)select n:count i, maxDiff:max abs vwap-vwapF from vwap[] lj 1!select parentOrderID, vwapF:vwap from vwapFast[]
+q)\t vwap[]
+q)\t vwapFast[]</pre></div>
+    <p>Two things to keep it honest. The cumulative columns belong on the tape itself in production, written once as prints arrive or at end of day, so the sums are not rebuilt per query. And restrict them to VWAP-eligible prints (no odd lots, auctions or out-of-sequence trades), or the fast answer will be fast and wrong.</p>
   </div>
   <div id="pr-writedown" class="shard-note">
     <div class="note-title">Writing the Day Down</div>
@@ -2918,6 +2976,7 @@ sizeK   -0.1246076  0.1000023  -1.246047 -0.01317544 0.00787961</pre></div>
     <div class="refitem"><span class="rtag">tca · ICE</span><div><a href="https://www.ice.com/insights/market-pulse/best-execution-transaction-analysis">Best Execution &amp; Transaction Analysis — ICE</a><p>TCA as best-execution evidence; the compliance-facing view.</p></div></div>
     <div class="refitem"><span class="rtag">tca · intro</span><div><a href="https://www.botminds.ai/solutions/transaction-cost-analysis/what-is-transaction-cost-analysis">What Is Transaction Cost Analysis — Botminds</a><p>A plain-language primer on the three phases, if the vocabulary is new.</p></div></div>
     <div class="refitem" id="ref-onetick"><span class="rtag">[7] pit</span><div><a href="https://www.onetick.com/pit-tca-methodology">Point-in-Time TCA Methodology — OneTick</a><p>Why evaluation must use the data as known at each instant — the look-ahead trap. Native in kdb+ via <code>aj</code> (§Benchmarks).</p></div></div>
+    <div class="refitem" id="ref-kx-tca"><span class="rtag">primer · KX</span><div><a href="https://kx.com/glossary/transaction-cost-analysis-an-introduction/">Transaction Cost Analysis: An Introduction — KX</a><p>The vendor's one-page primer: pre- vs post-trade, MiFID II best execution, and why FX TCA is harder than equities.</p></div></div>
 
     <div class="span" style="font-family:var(--display);font-style:normal;font-variant-caps:small-caps;letter-spacing:.035em;font-weight:600;font-size:18px;margin-top:10px;color:var(--fg)">Foundations</div>
     <div class="refitem" id="ref-lifecycle"><span class="rtag">companion</span><div><span style="color:var(--fg);font-weight:600">Shah, R. S. (ed.).</span> <a href="https://rohanshiloh.github.io/order-trade-lifecycle/">The Order &amp; Trade Lifecycle</a>.<p>The companion to this document: market structure, the OMS and EMS, FIX, post-trade, and the lifecycle as a kdb+ event stream. This document picks up where its analytics section stops.</p></div></div>
@@ -2926,6 +2985,7 @@ sizeK   -0.1246076  0.1000023  -1.246047 -0.01317544 0.00787961</pre></div>
     <div class="refitem" id="ref-kissell"><span class="rtag">[3] book</span><div><span style="color:var(--fg);font-weight:600">Kissell, R. (2013).</span> The Science of Algorithmic Trading and Portfolio Management. <i>Academic Press</i>.<p>The practitioner's full TCA framework — cost models, benchmarks, and attribution end to end.</p></div></div>
     <div class="refitem" id="ref-bouchaud"><span class="rtag">[4] paper</span><div><span style="color:var(--fg);font-weight:600">Bouchaud, Farmer &amp; Lillo (2009).</span> How Markets Slowly Digest Changes in Supply and Demand. <i>Handbook of Financial Markets</i>, 57–160.<p>Market impact and its slow decay — the theory under markouts and realised-spread reversion.</p></div></div>
     <div class="refitem" id="ref-madhavan"><span class="rtag">[5] paper</span><div><span style="color:var(--fg);font-weight:600">Madhavan, A. (2000).</span> Market Microstructure: A Survey. <i>Journal of Financial Markets</i>, 3(3), 205–258.<p>The microstructure ground — price formation, spreads and information — under every benchmark.</p></div></div>
+    <div class="refitem" id="ref-earley"><span class="rtag">[8] paper</span><div><span style="color:var(--fg);font-weight:600">Earley, C. (KX).</span> <a href="https://code.kx.com/q/wp/transaction-cost/">Transaction-Cost Analysis Using kdb+</a>. <i>KX white paper</i>.<p>TCA in q at production scale: interval VWAP from running sums and <code>aj</code>, window joins, trade-condition flags, pre-computed bars.</p></div></div>
   </div>
 </section>
 
