@@ -522,7 +522,7 @@ mjx-container svg{max-width:100%}
       <tr><td>Realised spread</td><td>The same, measured h later: what you kept.</td><td>0.3 bps at 60s.</td><td><code>.b.spreads</code> → <code>realisedBps</code></td><td>Comparing venues at different horizons.</td></tr>
       <tr><td>Price impact</td><td>Effective minus realised — the part the market took back.</td><td>1.1 − 0.3 = 0.8 bps.</td><td><code>effectiveBps-realisedBps</code></td><td>Calling adverse selection “impact”. You caused one, not the other.</td></tr>
       <tr><td>Adverse selection</td><td>Being filled right before the price moves against you.</td><td>passive fill, mid drops 2 bps in a second.</td><td>negative short-horizon <code>markout</code></td><td>Blaming the algo for what the counterparty knew.</td></tr>
-      <tr><td>Toxicity</td><td>A venue's tendency to produce adversely-selected fills.</td><td>EDGX at −0.70 bps on 1s.</td><td><code>scorecard[]</code> by <code>venue</code>, <code>horizon</code></td><td>Ranking venues by fill rate instead — the toxic ones fill fastest.</td></tr>
+      <tr><td>Toxicity</td><td>A venue's tendency to produce adversely-selected fills.</td><td>EDGX at −0.73 bps on 1s.</td><td><code>scorecard[]</code> by <code>venue</code>, <code>horizon</code></td><td>Ranking venues by fill rate instead — the toxic ones fill fastest.</td></tr>
       <tr><td>Maker / taker</td><td>Resting (adding) liquidity versus crossing to (removing) it.</td><td><code>liq="A"</code> vs <code>liq="R"</code>.</td><td>the fee model in Lab F2</td><td>Treating the rebate as income rather than the price of adverse selection.</td></tr>
       <tr><td>Queue position</td><td>How many shares rest ahead of yours at your price.</td><td>4,000 ahead of you at 182.40.</td><td><code>bsize</code> at placement, stamped on <code>ord</code></td><td>Inferring it afterwards. It is unrecoverable.</td></tr>
       <tr><td>Internalisation</td><td>The broker crosses you against its own book, not a venue.</td><td><code>liq="I"</code>, filled at the mid.</td><td><code>where liq="I"</code></td><td>Scoring it in the same pool as lit flow.</td></tr>
@@ -649,7 +649,7 @@ mjx-container svg{max-width:100%}
         <tr><td><code>childOrderID</code></td><td>the broker’s own ClOrdID (11) to the venue</td><td><code>oid</code>, the SOR placement</td></tr>
         <tr><td><code>execType</code></td><td>ExecType (150)</td><td>the order state machine</td></tr>
         <tr><td><code>lastPx</code>, <code>lastQty</code></td><td>LastPx (31), LastQty (32)</td><td>the fill</td></tr>
-        <tr><td><code>leaves</code>, <code>cumQty</code></td><td>LeavesQty (151), CumQty (14)</td><td>the running totals, per algo order</td></tr>
+        <tr><td><code>leaves</code>, <code>cumQty</code></td><td>LeavesQty (151), CumQty (14)</td><td>the running totals, kept per algo order: FIX has no algo-order concept, but this is the order the broker reports against</td></tr>
       </tbody>
     </table></div>
 </div>
@@ -820,9 +820,9 @@ active_window_index: 0</pre></div>
       <div class="body">
         <div class="desc">One table per message class — <code>quote</code>, <code>trade</code>, <code>ord</code>, <code>execs</code> — each opening with <code>time·sym</code> so <code>tick.q</code> accepts it and carrying <code>`g#sym</code> for fast by-sym selection. <code>time</code> is a timespan the TP stamps on receipt. Also the reference data every process agrees on: the universe, venue list, and session window.</div>
         <div class="code"><pre>/ exec-tca-stack : schema
-/ One event table per message class. Orders are a hierarchy: a parent (the PM's
-/ order) is worked as one or more algo orders (one per broker algo), each sliced
-/ into child orders, each of which may fill several times.
+/ Orders are a hierarchy: a parent (the PM's order) is worked as one or more
+/ algo orders (one per broker algo), each sliced into child orders, each of
+/ which may fill several times.
 / One event table per message class. tick.q loads this as its schema file,
 / so every table must open with `time`sym (tick.q enforces 2#key = `time`sym)
 / and carry `g#sym for fast by-sym selection in the RDB and CEP.
@@ -862,7 +862,7 @@ session:09:30:00.000 16:00:00.000                    / regular-hours window</pre
       </div>
     </details>
     <details class="srcfile" id="src-feed">
-      <summary><span class="fn">feed.q</span><span class="role">synthetic MD + order flow</span><span class="lc">131 lines</span></summary>
+      <summary><span class="fn">feed.q</span><span class="role">synthetic MD + order flow</span><span class="lc">135 lines</span></summary>
       <div class="body">
         <div class="desc">The market simulator. On a 100ms timer it random-walks each mid, publishes per-venue top-of-book and tape prints, spawns parent orders and slices them into child fills. Venue-dependent adverse selection (split fast/slow) is what makes the markout curves and the scorecard differ by venue. Publishes to the TP without a time column, per the kdb-tick contract.</div>
         <div class="code"><pre>/ exec-tca-stack : synthetic feed  (market data tape + order/execution flow)
@@ -888,8 +888,8 @@ vol:0.00001+0.000004*til n;                   / per-step volatility per sym (~0.
 / fills are not helped or hurt by its own routing; the dark venues leak nothing.
 toxF:venues!(-0.4 -0.4 -0.4 0.8 0.0 0.0);    / EDGX: damage inside the first second
 toxS:venues!(-0.5 -0.5 0.45 0.05 0.0 0.0);   / BATS: damage that keeps arriving
-alpha:1.5;                                    / the PM's edge: bps the price drifts his way, on average
-impK:0.02; impDecay:0.85;                     / impact per 100 shares, and how fast it fades per tick
+alpha:1.5;                                    / the decision's signal: bps the price drifts the order's way, on average
+impK:0.02; impDecay:0.85;                     / impact per 100 shares, and how fast it partly fades per tick
 pool:`ARCA`NSDQ`BATS`EDGX`EDGX`BATS`MLIT`INTL; / default router mix (lit-heavy, some dark/house)
 litPool:`ARCA`NSDQ`BATS`EDGX`EDGX`BATS;        / sweep the lit book only
 darkPool:`MLIT`MLIT`INTL;                      / midpoint and house only
@@ -940,16 +940,18 @@ spawnParent:{ if[0.08&lt;first 1?1f; :()];       / ~8% of ticks start a parent
   / 30% of parents carry a limit 1-3 bps through the arrival mid; the rest are market
   isLim:0.3&gt;first 1?1f; ot:$[isLim;"L";"M"];
   lim:$[isLim; (mid s)*1+1e-4*sg*1+first 1?2f; 0n];
-  / the PM trades for a reason: the price tends to drift his way over the next half minute
+  / a parent carries a small directional signal: the price tends to drift its way
+  / over the next half minute. That is decision quality, separate from execution.
   @[`slowD; s; +; sg*alpha*first 1?2f];
   / the parent, as the OMS records it: no algo yet, no child
   pub[`ord;(enlist uni s; enlist p; enlist `; enlist `; enlist `; enlist sd; enlist ot;
             enlist q; enlist lim; enlist "0"; enlist `; enlist `NEW)];
-  / the trader hands it to one or two broker algos, picked at random. Random
-  / assignment is the wheel: it is what makes the algos comparable afterwards.
+  / the trader hands it to one or two DIFFERENT broker algos, picked at random.
+  / Random assignment reduces selection bias and gives each algo a comparable
+  / sample of flow; enough of it is what makes the comparison meaningful.
   q1:lot*floor 0.6*q%lot;                      / a 60/40 split, in whole lots
   qs:$[0.6&gt;first 1?1f; enlist q; (q1; q-q1)];
-  k:count qs; ids:nid'[k#"A"]; al:algoNames k?count algoNames;
+  k:count qs; ids:nid'[k#"A"]; al:algoNames neg[k]?count algoNames;   / neg: deal, no repeats
   `active upsert ([] algoOrderID:ids; parentOrderID:k#p; sym:k#uni s; side:k#sd; algo:al;
     qty:qs; filledQty:k#0; limitPx:k#lim; born:k#nTick);
   pub[`ord;(k#uni s; k#p; ids; al; k#`; k#sd; k#ot; qs; k#lim; k#"0"; k#`SOR; k#`NEW)]; };
@@ -965,9 +967,11 @@ workOrders:{ if[0=count active; :()];
   c:count a; si:uni?a`sym; sg:?[(a`side)="B"; 1f; -1f]; r:a`route;
   vn:?[r=`lit; litPool c?count litPool; ?[r=`dark; darkPool c?count darkPool; pool c?count pool]];
   passive:(vn in lit) &amp; (c?1f)&lt;a`pPassive;
-  / A resting order only fills when someone comes to it: a resting buy is hit as the
-  / price falls, never as it rises. That selection IS adverse selection; the rebate
-  / is what a venue pays you to accept it.
+  / A resting order fills mainly when the market comes to it: here a resting buy is
+  / hit as the price falls or holds, never as it rises. That makes adverse selection
+  / possible, where filling every resting order by construction would hide it; the
+  / rebate is what a venue pays you to accept it. (Real queues also fill through
+  / queue advance and contra flow; this feed keeps only the price-driven part.)
   k:where not passive &amp; 0&lt;sg*(mid si)-prevMid si;
   if[0=count k; :()];
   a:a k; vn:vn k; passive:passive k; si:si k; sg:sg k; c:count k;
@@ -980,9 +984,9 @@ workOrders:{ if[0=count active; :()];
   / functional amend: accumulates when two orders hit the same sym in one tick
   @[`fastD; si; +; neg sg*toxF vn];             / the venue's after-effect, against the trader
   @[`slowD; si; +; neg sg*toxS vn];
-  imp:sg*impK*slice%lot;                        / our own impact: moves the price now, fades later
+  imp:sg*impK*slice%lot;                        / our own impact: moves the price now, then partly fades
   @[`impD; si; +; imp]; @[`mid; si; *; 1+1e-4*imp];
-  cum:a[`filledQty]+slice; lv:a[`qty]-cum;      / CumQty and LeavesQty are per algo order
+  cum:a[`filledQty]+slice; lv:a[`qty]-cum;      / per algo order, mirroring FIX CumQty / LeavesQty
   pub[`execs;(a`sym; a`parentOrderID; a`algoOrderID; a`algo; nid'[c#"C"]; a`side; c#"F";
              px; slice; lv; cum; vn; liq)];
   pub[`trade;(a`sym; vn; px; slice)];           / our own fills print on the tape too
@@ -999,7 +1003,7 @@ system"t 100";                                 / drive the feed every 100ms
       </div>
     </details>
     <details class="srcfile" id="src-engine">
-      <summary><span class="fn">engine.q</span><span class="role">state + handlers + benchmark wrappers</span><span class="lc">83 lines</span></summary>
+      <summary><span class="fn">engine.q</span><span class="role">state + handlers + benchmark wrappers</span><span class="lc">97 lines</span></summary>
       <div class="body">
         <div class="desc">The core. Holds the live tables, keeps a <code>topMid</code> per sym, stamps arrival price on every parent at its <code>NEW</code>, folds fills into parent state, and exposes the no-argument benchmark wrappers. Loaded by both the live CEP and the replay path, so one code path serves real-time and batch.</div>
         <div class="code"><pre>/ exec-tca-stack : the TCA engine
@@ -1061,7 +1065,7 @@ pov:{ .b.participation[parent;trade;execs] };
 vcurve:{ .b.volcurve trade };
 closes:{ .b.closePx trade };
 algoArrival:{ .b.algoArrival[algoOrd;execs] };         / slippage per algo order
-algos:{ .b.algoScorecard algoArrival[] };               / and per algo: what the wheel reads
+algoScorecard:{ .b.algoScorecard algoArrival[] };       / and per algo: what the wheel reads
 
 / beyond-vanilla wrappers (beyond.q)
 robust:{ .b.robustArrival[parent;quote;0D00:00:01] };
@@ -1078,17 +1082,31 @@ peers:{ .b.pctScore[parent;execs] };
 / Each coefficient is bps relative to VWAP, after allowing for limit and size.
 wheel:{ f:.b.wheelData[algoOrd;execs;ord];
   X:flip (count[f]#1f; f`isPOV; f`isARRIVAL; f`isDARK; f`limited; f`sizeK);
-  r:.b.olsFit[X; f`slipBps];
-  ([] driver:`VWAP`POV`ARRIVAL`DARK`limited`sizeK; bpsPerUnit:r 0; stdErr:r 1; tStat:r[0]%r 1) };
+  r:.b.olsCluster[X; f`slipBps; f`parentOrderID];       / errors clustered by parent
+  / VWAPbase is the intercept: a market VWAP order of zero size. The algo rows are
+  / DIFFERENCES from it, so ARRIVAL's total is VWAPbase + ARRIVAL.
+  ([] driver:`VWAPbase`POV`ARRIVAL`DARK`limited`sizeK; bpsPerUnit:r 0; stdErr:r 1; tStat:r[0]%r 1) };
+/ the paired wheel: the same question asked only of parents split across two
+/ algos, on the differences between the halves. No intercept: the market, the
+/ limit and the parent's signal are the same for both halves, so they cancel.
+/ Each row is bps (or fill rate) relative to VWAP.
+wheelPaired:{ p:.b.wheelPairs[algoOrd;execs];
+  d:{[p;k] (`float$p[`algo1]=k)-`float$p[`algo2]=k}[p];
+  X:flip (d`POV; d`ARRIVAL; d`DARK; p`dSize);
+  s:.b.olsFit[X; p`dSlip]; f:.b.olsFit[X; p`dFill];
+  ([] driver:`POV`ARRIVAL`DARK`sizeK; slipBps:s 0; slipSE:s 1; slipT:s[0]%s 1;
+      fillRate:f 0; fillSE:f 1) };
+
 / why: the same slippage per parent, fitted on how each one was traded
 drivers:{ f:.b.wheelFeatures[parent;trade;execs;ord];
   X:flip (count[f]#1f; f`limited; f`pov; f`sizeK; f`passiveShare; f`toxicShare; f`darkShare);
+  r:.b.olsFit[X; f`slipBps];
   ([] driver:`intercept`limited`pov`sizeK`passiveShare`toxicShare`darkShare;
-      bpsPerUnit:.b.wheelFit[X; f`slipBps]) };</pre></div>
+      bpsPerUnit:r 0; stdErr:r 1; tStat:r[0]%r 1) };</pre></div>
       </div>
     </details>
     <details class="srcfile" id="src-bench">
-      <summary><span class="fn">bench.q</span><span class="role">the TCA library (.b.*)</span><span class="lc">118 lines</span></summary>
+      <summary><span class="fn">bench.q</span><span class="role">the TCA library (.b.*)</span><span class="lc">124 lines</span></summary>
       <div class="body">
         <div class="desc">Pure functions, each taking the tables it needs explicitly: arrival/IS and shortfall, interval VWAP and TWAP, markouts, effective/realised spread, the venue scorecard, OFI, realised participation, the square-root pre-trade estimate, and the volume curve. Nothing here touches global state, so the same function runs inside the CEP and over a replayed HDB day.</div>
         <div class="code"><pre>/ exec-tca-stack : benchmark &amp; TCA library  (.b namespace, pure functions)
@@ -1132,10 +1150,16 @@ algoArrival:{[algoOrd;execs]
   update slipBps:1e4*.b.buyorsell[side]*(arrivalMid-averageFillPrice)%arrivalMid,
          fillRate:(0^filled)%qty from a };
 
-/ per algo: cost and completeness side by side, never one without the other
+/ per algo: cost, completeness and stability side by side, never one alone.
+/ The algo-level twin of the venue scorecard: this one feeds the wheel, that one
+/ the router. stdErr is the uncertainty of avgSlipBps; comparing two algos is the
+/ wheel's job, not this table's.
 algoScorecard:{[aa] 0!select algoOrders:count i, shares:sum 0^filled,
-    avgSlipBps:avg slipBps, medSlipBps:med slipBps where not null slipBps, sharesWtdBps:(0^filled) wavg slipBps,
-    fillRate:avg fillRate by algo from aa };
+    avgFillRate:avg fillRate, medFillRate:med fillRate,
+    avgSlipBps:avg slipBps, medSlipBps:med slipBps where not null slipBps,
+    sharesWtdBps:(0^filled) wavg slipBps, slipStd:dev slipBps where not null slipBps,
+    stdErr:(dev slipBps where not null slipBps)%sqrt sum not null slipBps
+    by algo from aa };
 
 / ── VWAP (interval) ──────────────────────────────────────────────────────
 / the tape over each parent's own active window [first fill; last fill].
@@ -1212,7 +1236,7 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
       </div>
     </details>
     <details class="srcfile" id="src-beyond">
-      <summary><span class="fn">beyond.q</span><span class="role">beyond-vanilla benchmarks — the F labs</span><span class="lc">134 lines</span></summary>
+      <summary><span class="fn">beyond.q</span><span class="role">beyond-vanilla benchmarks — the F labs</span><span class="lc">154 lines</span></summary>
       <div class="body">
         <div class="desc">Robust arrival, fee-aware cost, the marketable/limited split, the PWP range, point-in-time bands, execution versus market, and percentile scoring. Defined from the root with explicit <code>.b.</code> names, because KDB-X does not fall back to the root for reads made inside a namespace.</div>
         <div class="code"><pre>/ exec-tca-stack : beyond-vanilla TCA  (the F labs; extends the .b namespace)
@@ -1330,11 +1354,18 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
   e:y-X mmu b; s2:(e wsum e)%count[y]-count b;
   (b; sqrt s2*xi@'til count b) };
 
+/ the same, with standard errors that allow for orders in a cluster (here, the
+/ algo orders of one parent) sharing a market: they are not independent draws.
+.b.olsCluster:{[X;y;g] xi:inv flip[X] mmu X; b:xi mmu flip[X] mmu y; e:y-X mmu b;
+  m:sum {[X;e;i] v:flip[X i] mmu e i; v*/:v}[X;e] each value group g;
+  G:count distinct g;
+  (b; sqrt (G%G-1)*(xi mmu m mmu xi)@'til count b) };
+
 / one row per algo order: its slippage, which algo it went to, and two controls.
 / VWAP is the base, so each flag reads "bps relative to VWAP".
 .b.wheelData:{[algoOrd;execs;ord]
   a:.b.algoArrival[algoOrd;execs] lj .b.cohort ord;
-  select algoOrderID, algo, slipBps,
+  select algoOrderID, parentOrderID, algo, slipBps,
          isPOV:`float$algo=`POV, isARRIVAL:`float$algo=`ARRIVAL, isDARK:`float$algo=`DARK,
          limited:`float$cohort=`limited, sizeK:qty%10000
     from a where not null slipBps };
@@ -1348,11 +1379,24 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
   t:(a lj p) lj m;
   select parentOrderID, slipBps, limited:`float$cohort=`limited, pov, sizeK:qty%10000,
          passiveShare, toxicShare, darkShare
-    from t where not null slipBps, not null pov, pov&lt;0w };</pre></div>
+    from t where not null slipBps, not null pov, pov&lt;0w };
+
+/ ── the paired wheel: one parent, two algos, one market ───────────────────
+/ When a parent is split across two algos, both halves trade through the same
+/ prices at the same time, so the difference between them has the market taken
+/ out. One row per split parent: which two algos, and the differences.
+.b.wheelPairs:{[algoOrd;execs]
+  a:select parentOrderID, algo, slipBps, fillRate, sizeK:qty%10000
+      from .b.algoArrival[algoOrd;execs] where not null slipBps;
+  a:select from a where 2=(count;i) fby parentOrderID;    / both halves traded
+  0!select algo1:first algo, algo2:last algo,
+      dSlip:(first slipBps)-last slipBps, dFill:(first fillRate)-last fillRate,
+      dSize:(first sizeK)-last sizeK
+    by parentOrderID from a };</pre></div>
       </div>
     </details>
     <details class="srcfile" id="src-tca">
-      <summary><span class="fn">tca.q</span><span class="role">live CEP — loads engine.q</span><span class="lc">16 lines</span></summary>
+      <summary><span class="fn">tca.q</span><span class="role">live CEP — loads engine.q</span><span class="lc">17 lines</span></summary>
       <div class="body">
         <div class="desc">The live process. Loads the engine and subscribes to the <b>chained</b> tickerplant on 5013, so a slow query here can never back up the order-flow plant. Once up, the benchmark wrappers are prompt commands: <code>arrival[]</code>, <code>markouts[]</code>, <code>scorecard[]</code>.</div>
         <div class="code"><pre>/ exec-tca-stack : live TCA CEP  (chained-TP subscriber)
@@ -1368,9 +1412,10 @@ TP:$[count .z.x; first .z.x; ":5013"];
 .u.end:{[d] {@[`.;x;0#]} each `quote`trade`ord`execs;
   @[;`sym;`g#] each `quote`trade`ord`execs;
   delete from `parent; delete from `algoOrd;
+  topMid::(`symbol$())!`float$();                   / no stale mid from yesterday
   -1"end of day ",string[d],": intraday state cleared"; };
 
--1"tca → subscribed @ ",TP,"   try:  arrival[]  markouts[]  scorecard[]  ofi[]";</pre></div>
+-1"tca → subscribed @ ",TP,"   try:  arrival[]  scorecard[]  algoScorecard[]  wheelPaired[]";</pre></div>
       </div>
     </details>
     <details class="srcfile" id="src-replay">
@@ -1443,14 +1488,15 @@ bps:{ 0.01*floor 0.5+100*x };                 / round to 2dp for the eye
       </div>
     </details>
     <details class="srcfile" id="src-dump">
-      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">122 lines</span></summary>
+      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">126 lines</span></summary>
       <div class="body">
         <div class="desc"><code>\l dump.q</code> then <code>tcaDump[]</code> in the TCA tab runs every benchmark and writes the output to <code>tcaData.txt</code>. Each query is trapped, so one failure prints its error and the rest still run. The outputs in this document came from it.</div>
         <div class="code"><pre>/ exec-tca-stack : write TCA diagnostics to tcaData.txt
 / usage, in the TCA tab:   \l dump.q      then   tcaDump[]
 / Each query is trapped, so one failure prints its error and the rest still run.
-/ The list ends with every prompt line the labs show, then rescue.q and replay.q
-/ run on a 5MB cut of today's tickerplant log (written to /tmp).
+/ After the benchmarks come the algo-wheel queries, every prompt line the labs
+/ show, rescue.q and replay.q on a 5MB cut of today's tickerplant log (written
+/ to /tmp), and finally checks on the other processes over handles.
 tcaQueries:(
   ".z.P";
   "tables[]!count each value each tables[]";
@@ -1491,8 +1537,11 @@ tcaQueries:(
   "5#.b.wheelFeatures[parent;trade;execs;ord]";
   "select algoOrders:count i, parents:count distinct parentOrderID by algo from algoOrd";
   "5#algoArrival[]";
-  "algos[]";
+  "algoScorecard[]";
   "wheel[]";
+  "count .b.wheelPairs[algoOrd;execs]";
+  "5#.b.wheelPairs[algoOrd;execs]";
+  "wheelPaired[]";
   "drivers[]";
   "select n:count i, avgPassive:avg liq=\"A\", avgDark:avg liq in \"MI\" by algo from execs";
   "5#select tot:distinct cumQty+leaves by algoOrderID from execs";
@@ -1845,11 +1894,11 @@ onExec:{[d] d:select from d where execType="F";
 q)5#0!parent
 parentOrderID sym  side qty   arrivalTime          arrivalMid filledQty notional
 --------------------------------------------------------------------------------
-P1            AAPL S    5000  0D05:18:51.369542000 182.4029   5000      911947.3
-P11           AAPL B    13000 0D05:18:52.068143000 182.3972   13000     2371067
-P33           JPM  B    10000 0D05:18:53.768316000 201.808    10000     2018109
-P39           NVDA S    2000  0D05:18:53.968793000 121.682    2000      243359.5
-P73           JPM  S    31000 0D05:18:55.468743000 201.8017   31000     6254224
+P1            AAPL S    5000  0D08:31:46.501987000 182.4029   5000      912016.4
+P10           AAPL B    37000 0D08:31:47.103084000 182.4085   37000     6748212
+P45           TSLA S    8000  0D08:31:48.501723000 244.2091   8000      1953523
+P61           TSLA S    16000 0D08:31:48.901854000 244.2154   16000     3906890
+P78           AMZN B    18000 0D08:31:49.301177000 178.9141   18000     3220393
 q)select pctFilled:filledQty%qty, vwapFill:notional%filledQty by parentOrderID from parent</pre></div>
     </div>
   </div>
@@ -1901,11 +1950,11 @@ arrival:{[parent;execs]
       <div class="code"><pre>q)select parentOrderID,sym,side,fillRate,slipBps from 5#arrival[]
 parentOrderID sym  side fillRate slipBps
 -------------------------------------------
-P1            AAPL S    1        -0.7377269
-P11           AAPL B    1        0.4059554
-P33           JPM  B    1        -0.1406248
-P39           NVDA S    1        -0.1830865
-P73           JPM  S    1        -2.604371
+P1            AAPL S    1        0.01998641
+P10           AAPL B    1        1.337257
+P45           TSLA S    1        -0.7698873
+P61           TSLA S    1        -1.424711
+P78           AMZN B    1        0.1879276
 q)select wAvg:fillRate wavg slipBps from arrival[]   <span class="c">/ book-level</span></pre></div>
     </div>
   </div>
@@ -1930,12 +1979,12 @@ ivwap:{[parent;trade;execs]
   update vwap:vw, slipBps:1e4*.b.buyorsell[side]*(vw-averageFillPrice)%vw from sp };</pre></div>
       <div class="code"><pre>q)5#vwap[]
 parentOrderID sym  side startTime            endTime              averageFillPrice vwap     slipBps
---------------------------------------------------------------------------------------------------------
-P1            AAPL S    0D05:18:51.369737000 0D05:18:53.969285000 182.3895         182.3875 0.1096044
-P10048        META B    0D05:22:24.167432000 0D05:22:27.367932000 503.6252         503.6251 -0.002851989
-P10123        JPM  S    0D05:22:25.168002000 0D05:22:28.467625000 202.1123         202.1111 0.06337713
-P10134        AAPL B    0D05:22:25.268329000 0D05:23:08.467877000 182.2127         182.2188 0.3337193
-P10148        NVDA B    0D05:22:25.667797000 0D05:22:40.567518000 121.5801         121.58   -0.009494124
+------------------------------------------------------------------------------------------------------
+P1            AAPL S    0D08:31:46.502228000 0D08:31:48.801006000 182.4033         182.4004 0.1596324
+P10           AAPL B    0D08:31:47.103212000 0D08:31:55.301580000 182.3841         182.3756 -0.4678189
+P10000        TSLA B    0D08:35:42.899772000 0D08:36:05.999986000 244.3912         244.3887 -0.1003834
+P10005        NVDA S    0D08:35:43.099704000 0D08:35:44.500635000 121.9008         121.9101 -0.7670798
+P100070       META S    0D09:04:13.305532000 0D09:04:30.096621000 503.7825         503.788  -0.1094626
 
 <span class="c">/ TWAP (mean mid) and close, per sym</span>
 q).b.twap[quote;`NVDA; min quote`time; max quote`time]
@@ -1965,9 +2014,9 @@ markout:{[execs;quote;horizons]
       <div class="code"><pre>q)select averageBps:avg bps by horizon from markouts[]
 horizon             | averageBps
 --------------------| -----------
-0D00:00:01.000000000| -0.1625728    <span class="c">/ the book as a whole is near flat; the venues are not</span>
-0D00:00:10.000000000| -0.08768744
-0D00:01:00.000000000| -0.2665073</pre></div>
+0D00:00:01.000000000| -0.1691318    <span class="c">/ the book as a whole is near flat; the venues are not</span>
+0D00:00:10.000000000| -0.09413869
+0D00:01:00.000000000| -0.1731708</pre></div>
     </div>
     <figure class="span" id="markout-curves" style="margin-top:6px"><a id="fig-markouts" style="position:absolute" aria-hidden="true"></a>
       <div class="fig">
@@ -2012,8 +2061,8 @@ horizon             | averageBps
   <div id="reading-markouts" class="shard-note">
     <div class="note-title">Reading a Markout Curve</div>
     <p>Computing a markout is one join. Reading one takes more care, and there are four things to look at, in this order.</p>
-    <p><b>The level at the shortest horizon.</b> This is what the fill cost you before anything else happened. A taker starts about half a spread down, because it paid to cross; a resting order starts about half a spread up, because it was paid to wait. In the live run the taker fills sit at −0.41 bps after one second and the passive fills at +0.25. Compare venues within the same kind of fill, or the mix of making and taking will pass for venue quality.</p>
-    <p><b>The slope from one horizon to the next.</b> A curve that drops and then goes flat was a one-off: someone was faster, the damage is done, and it does not grow. EDGX in the live scorecard is −0.70, −0.69, −0.86. A curve that starts near zero and keeps falling is information arriving after you traded: BATS runs −0.13, −0.34, −0.76. The first is a latency problem and the second a routing problem, and one blended number cannot tell them apart.</p>
+    <p><b>The level at the shortest horizon.</b> This is what the fill cost you before anything else happened. A taker starts about half a spread down, because it paid to cross; a resting order starts about half a spread up, because it was paid to wait. In the live run the taker fills sit at −0.42 bps after one second and the passive fills at +0.21. Compare venues within the same kind of fill, or the mix of making and taking will pass for venue quality.</p>
+    <p><b>The slope from one horizon to the next.</b> A curve that drops and then goes flat was a one-off: someone was faster, the damage is done, and it does not grow. EDGX in the live scorecard is −0.73, −0.68, −0.75. A curve that starts near zero and keeps falling is information arriving after you traded: BATS runs −0.12, −0.29, −0.49. The first is a latency problem and the second a routing problem, and one blended number cannot tell them apart.</p>
     <p><b>The sign at the longest horizon.</b> Positive and rising means the market kept moving your way after you traded, which usually reflects your own remaining order still pushing the price. Negative means you would have done better by waiting. Near zero means you paid the spread and nothing else.</p>
     <p><b>The number of fills behind each point.</b> A sixty-second markout is noisy: over ten minutes of this feed it moved by a few tenths of a basis point between runs, and settled only at thirty. Put the count beside every average, and prefer the median when the two disagree.</p>
   </div>
@@ -2040,26 +2089,26 @@ spreads:{[execs;quote;h]
   update impact:effectiveBps-realisedBps from r };</pre></div>
       <div class="code"><pre><span class="c">/ the venue scorecard — one group-by, re-run any time</span>
 q)scorecard[]
-venue horizon              numberOfFills shares  averageBps
-------------------------------------------------------------
-ARCA  0D00:00:01.000000000 6683          2030600 -0.01522215
-ARCA  0D00:00:10.000000000 6683          2030600 0.2512425
-ARCA  0D00:01:00.000000000 6683          2030600 0.2710495
-BATS  0D00:00:01.000000000 13507         4123200 -0.1333613
-BATS  0D00:00:10.000000000 13507         4123200 -0.337155
-BATS  0D00:01:00.000000000 13507         4123200 -0.7626935    <span class="c">/ clean at first, damage keeps arriving</span>
-EDGX  0D00:00:01.000000000 13458         4058000 -0.703685    <span class="c">/ hit inside the first second, then flat</span>
-EDGX  0D00:00:10.000000000 13458         4058000 -0.6926608
-EDGX  0D00:01:00.000000000 13458         4058000 -0.8633812
-INTL  0D00:00:01.000000000 9948          2851900 0.04213108
-INTL  0D00:00:10.000000000 9948          2851900 0.2171763
-INTL  0D00:01:00.000000000 9948          2851900 0.1274421
-MLIT  0D00:00:01.000000000 13879         4404100 0.04944311
-MLIT  0D00:00:10.000000000 13879         4404100 0.2375413
-MLIT  0D00:01:00.000000000 13879         4404100 0.08989748
-NSDQ  0D00:00:01.000000000 6650          2014200 -0.02362197
-NSDQ  0D00:00:10.000000000 6650          2014200 0.1678895
-NSDQ  0D00:01:00.000000000 6650          2014200 0.07584965
+venue horizon              numberOfFills shares   averageBps
+-------------------------------------------------------------
+ARCA  0D00:00:01.000000000 16758         4937600  -0.04906707
+ARCA  0D00:00:10.000000000 16758         4937600  0.2769848
+ARCA  0D00:01:00.000000000 16758         4937600  0.1206517
+BATS  0D00:00:01.000000000 33286         9771800  -0.1228468
+BATS  0D00:00:10.000000000 33286         9771800  -0.2887932
+BATS  0D00:01:00.000000000 33286         9771800  -0.4869627    <span class="c">/ clean at first, damage keeps arriving</span>
+EDGX  0D00:00:01.000000000 33560         9809500  -0.726022    <span class="c">/ hit inside the first second, then flat</span>
+EDGX  0D00:00:10.000000000 33560         9809500  -0.6812882
+EDGX  0D00:01:00.000000000 33560         9809500  -0.7453323
+INTL  0D00:00:01.000000000 25720         7378000  0.03822375
+INTL  0D00:00:10.000000000 25720         7378000  0.1075748
+INTL  0D00:01:00.000000000 25720         7378000  0.04346224
+MLIT  0D00:00:01.000000000 35150         11124900 0.04080127
+MLIT  0D00:00:10.000000000 35150         11124900 0.1333955
+MLIT  0D00:01:00.000000000 35150         11124900 0.1718593
+NSDQ  0D00:00:01.000000000 16540         4820700  -0.02256494
+NSDQ  0D00:00:10.000000000 16540         4820700  0.3157054
+NSDQ  0D00:01:00.000000000 16540         4820700  0.2514442
 q)select effectiveBps:avg effectiveBps, impact:avg impact by venue from spreads[]</pre></div>
     </div>
   </div>
@@ -2068,7 +2117,7 @@ q)select effectiveBps:avg effectiveBps, impact:avg impact by venue from spreads[
     <div class="note-title">Why the Toxic Venue Fills You First</div>
     <p>A fill needs someone on the other side, and the question a scorecard exists to answer is who that was. On a venue where the other side is mostly slow, uninformed flow, your resting order waits its turn and fills at a price that stays fair. On a venue where the other side is fast or informed, your order fills at the moment it becomes a bad price: just before the quote moves through it. From the inside those look the same, except that the second kind fills sooner and more often.</p>
     <p>That is why <b>fill rate is a dangerous way to rank venues</b>. Availability and quality pull in opposite directions: the venue most willing to trade with you right now is disproportionately the one whose counterparties know something you do not. Rank on fill rate and you route more flow to exactly the place that costs you most.</p>
-    <p>It is also what <b>rebates</b> are for. A venue pays you to rest an order because resting is a risk: you are offering a free option to anyone faster than you. The rebate is the premium for writing that option, set by a venue that knows how often it gets exercised. In the fee lab (<a href="#lab-f2">F2</a>), BATS pays the best rebate on the street, 0.25 bps, and its one-minute markout takes back 0.76.</p>
+    <p>It is also what <b>rebates</b> are for. A venue pays you to rest an order because resting is a risk: you are offering a free option to anyone faster than you. The rebate is the premium for writing that option, set by a venue that knows how often it gets exercised. In the fee lab (<a href="#lab-f2">F2</a>), BATS pays the best rebate on the street, 0.25 bps, and its one-minute markout takes back 0.49.</p>
     <p>So read the scorecard as a row. Fill rate says how available a venue is, the short markout how fast its counterparties are, the long markout how informed they are, and the fee line what you were paid to find out.</p>
   </div>
 
@@ -2118,12 +2167,12 @@ participation:{[parent;trade;execs]
   update pov:executedQty%0f+f'[sp`sym;sp`startTime;sp`endTime] from sp };</pre></div>
       <div class="code"><pre>q)5#pov[]
 parentOrderID sym  startTime            endTime              executedQty pov
------------------------------------------------------------------------------------
-P1            AAPL 0D05:18:51.369737000 0D05:18:53.969285000 5000        0.1187648
-P10048        META 0D05:22:24.167432000 0D05:22:27.367932000 4000        0.06666667
-P10123        JPM  0D05:22:25.168002000 0D05:22:28.467625000 3000        0.04297994
-P10134        AAPL 0D05:22:25.268329000 0D05:23:08.467877000 37000       0.05109791
-P10148        NVDA 0D05:22:25.667797000 0D05:22:40.567518000 11000       0.04419446
+----------------------------------------------------------------------------------
+P1            AAPL 0D08:31:46.502228000 0D08:31:48.801006000 5000        0.1111111
+P10           AAPL 0D08:31:47.103212000 0D08:31:55.301580000 37000       0.2522154
+P10000        TSLA 0D08:35:42.899772000 0D08:36:05.999986000 21000       0.0619469
+P10005        NVDA 0D08:35:43.099704000 0D08:35:44.500635000 4000        0.1273885
+P100070       META 0D09:04:13.305532000 0D09:04:30.096621000 29000       0.106305
 q)vcurve[]                  <span class="c">/ eyeball the U</span></pre></div>
     </div>
   </div>
@@ -2152,13 +2201,13 @@ q)a:arrival[] lj select Q:sum lastQty by parentOrderID from execs where execType
 q)select averageBps:avg bps, medBps:med bps, clampedBps:avg .b.winsor[bps;-25f;25f], n:count i
     by venue from markouts[]
 venue| averageBps medBps     clampedBps n
------| --------------------------------------
-ARCA | 0.1690233  0.08821321 0.1725969  20049
-BATS | -0.4110699 -0.1903544 -0.3960732 40521    <span class="c">/ mean twice the median → a tail</span>
-EDGX | -0.7532423 -0.689323  -0.7403757 40374    <span class="c">/ mean ≈ median → every fill, not a few</span>
-INTL | 0.1289165  0.121774   0.1364484  29844
-MLIT | 0.1256273  0.1334315  0.1319904  41637
-NSDQ | 0.07337238 0.06481653 0.08425971 19950</pre></div>
+-----| ---------------------------------------
+ARCA | 0.1161898  0.06208259 0.1145935  50274
+BATS | -0.2995342 -0.1559691 -0.2992703 99858    <span class="c">/ mean twice the median → a tail</span>
+EDGX | -0.7175475 -0.704387  -0.7177407 100680    <span class="c">/ mean ≈ median → every fill, not a few</span>
+INTL | 0.06308694 0.0728817  0.06240216 77160
+MLIT | 0.115352   0.08103068 0.1138717  105450
+NSDQ | 0.1815282  0.09261538 0.1812824  49620</pre></div>
     </div>
   </div>
 
@@ -2258,38 +2307,45 @@ wrote ~/Code/exec-tca-stack/tcaEod.txt
 q)end of day 2026.11.18: intraday state cleared    <span class="c">/ the engine, told by the chained TP</span></pre></div>
       <div class="code"><pre><span class="c">/ the RDB before, and after it has written the day down</span>
 q)rq[5011;"tables[]!count each value each tables[]"]
-execs| 8
-ord  | 2
-quote| 64
-trade| 36
+execs| 816
+ord  | 13
+quote| 4864
+trade| 3796
 q)rq[5010;".u.endofday[]"]
 q)rq[5011;"tables[]!count each value each tables[]"]
-execs| 8
-ord  | 2
+execs| 3
+ord  | 0
 quote| 64
-trade| 36
+trade| 31
 
 <span class="c">/ the tickerplant has rolled</span>
 q)rq[5010;"`date`log!(.u.d;.u.L)"]
-date| 2026.11.19
-log | `:./log/sym2026.11.19
+date| 2026.11.20
+log | `:./log/sym2026.11.20
 
 <span class="c">/ and the HDB now serves the day, partitioned by date, parted on sym</span>
 q)rq[5012;"select n:count i by date from execs"]
 date      | n
-----------| -----
-2026.11.18| 65165
+----------| ------
+2026.11.18| 268500
+2026.11.19| 816
 q)rq[5012;"select n:count i, shares:sum lastQty by date, venue from execs"]
 date       venue| n     shares
-----------------| -------------
-2026.11.18 ARCA | 6771  2053900
-2026.11.18 BATS | 13701 4177000
-2026.11.18 EDGX | 13664 4113800
-2026.11.18 INTL | 10127 2905000
-2026.11.18 MLIT | 14148 4491500
-2026.11.18 NSDQ | 6754  2042600
+----------------| --------------
+2026.11.18 ARCA | 28110 8314800
+2026.11.18 BATS | 55741 16533400
+2026.11.18 EDGX | 56140 16519200
+2026.11.18 INTL | 42448 12141900
+2026.11.18 MLIT | 58318 18433200
+2026.11.18 NSDQ | 27743 8154700
+2026.11.19 ARCA | 73    24700
+2026.11.19 BATS | 163   54300
+2026.11.19 EDGX | 172   48600
+2026.11.19 INTL | 123   34100
+2026.11.19 MLIT | 202   70600
+2026.11.19 NSDQ | 83    25200
 q)key `:log/sym
-`s#`2026.11.18`sym</pre></div>
+`s#`2026.11.18`2026.11.19`sym</pre></div>
     </div>
   </div>
 </section>
@@ -2312,7 +2368,7 @@ q)key `:log/sym
       <div class="code"><pre><span class="c">/ beyond.q — median mid over the first second</span>
 / median mid over [arrivalTime; arrivalTime+w], not a single snapshot
 .b.robustArrival:{[parent;quote;w]
-  g:{[q;sy;t;w] m:q where (q`sym)=sy; m@:where m[`time] within (t;t+w);
+  g:{[q;sy;t;w] m:select bid,ask from q where sym=sy, time within (t;t+w);
        $[count m; med 0.5*m[`bid]+m`ask; 0n]}[quote];
   p:0!parent;
   update arrivalMidRobust:g'[p`sym;p`arrivalTime;w] from p };
@@ -2320,16 +2376,16 @@ q)key `:log/sym
 q)5#select parentOrderID,sym,arrivalMid,arrivalMidRobust from robust[]
 parentOrderID sym  arrivalMid arrivalMidRobust
 ----------------------------------------------
-P1            AAPL 182.4029   182.3958
-P11           AAPL 182.3972   182.3794
-P33           JPM  201.808    201.8066
-P39           NVDA 121.682    121.6822
-P73           JPM  201.8017   201.8049
+P1            AAPL 182.4029   182.4082
+P10           AAPL 182.4085   182.406
+P45           TSLA 244.2091   244.2055
+P61           TSLA 244.2154   244.2001
+P78           AMZN 178.9141   178.919
 q)select n:count i, avgGapBps:avg abs 1e4*(arrivalMidRobust-arrivalMid)%arrivalMid,
     maxGapBps:max abs 1e4*(arrivalMidRobust-arrivalMid)%arrivalMid from robust[]
 n    avgGapBps maxGapBps
 ------------------------
-1029 0.511306  3.376162    <span class="c">/ half a basis point apart on average, over three at worst</span></pre></div>
+2513 0.5287366 3.027815    <span class="c">/ half a basis point apart on average, three at worst</span></pre></div>
     </div>
   </div>
 
@@ -2362,45 +2418,45 @@ n    avgGapBps maxGapBps
 q)select spreadBps:avg spreadBps, feeBps:avg feeBps, allInBps:avg spreadBps+feeBps,
     shares:sum lastQty by venue, liq from fees[]
 venue liq| spreadBps  feeBps allInBps   shares
----------| ------------------------------------
-ARCA  A  | -0.3121888 -0.2   -0.5121888 291700
-ARCA  R  | 0.4891222  0.3    0.7891222  1738900
-BATS  A  | -0.3073158 -0.25  -0.5573158 546600    <span class="c">/ best rebate on the street …</span>
-BATS  R  | 0.4843019  0.29   0.7743019  3576600
-EDGX  A  | -0.2957213 -0.18  -0.4757213 537000
-EDGX  R  | 0.4867649  0.3    0.7867649  3521000
-INTL  I  | 0          0      0          2851900
-MLIT  M  | 0          0.1    0.1        4404100
-NSDQ  A  | -0.2794101 -0.2   -0.4794101 268400
-NSDQ  R  | 0.4870541  0.3    0.7870541  1745800
+---------| -------------------------------------
+ARCA  A  | -0.2894678 -0.2   -0.4894678 707900
+ARCA  R  | 0.4815403  0.3    0.7815403  4229700
+BATS  A  | -0.2893746 -0.25  -0.5393746 1399400    <span class="c">/ best rebate on the street …</span>
+BATS  R  | 0.4778058  0.29   0.7678058  8372400
+EDGX  A  | -0.2870004 -0.18  -0.4670004 1455800
+EDGX  R  | 0.4810843  0.3    0.7810843  8353700
+INTL  I  | 0          0      0          7378000
+MLIT  M  | 0          0.1    0.1        11124900
+NSDQ  A  | -0.2911441 -0.2   -0.4911441 674800
+NSDQ  R  | 0.474977   0.3    0.774977   4145900
 
 <span class="c">/ … and what the markout then took back, by venue</span>
 q)select averageBps:avg bps by venue from markouts[] where horizon=0D00:01:00
 venue| averageBps
 -----| ----------
-ARCA | 0.2710495
-BATS | -0.7626935    <span class="c">/ … and a minute later the markout has taken back three times that</span>
-EDGX | -0.8633812
-INTL | 0.1274421
-MLIT | 0.08989748
-NSDQ | 0.07584965
+ARCA | 0.1206517
+BATS | -0.4869627    <span class="c">/ … and a minute later the markout has taken back twice that</span>
+EDGX | -0.7453323
+INTL | 0.04346224
+MLIT | 0.1718593
+NSDQ | 0.2514442
 
 <span class="c">/ and by how the fill happened: making versus taking</span>
 q)select averageBps:avg bps, n:count i by liq, horizon from markouts[]
-liq horizon             | averageBps  n
-------------------------| -----------------
-A   0D00:00:01.000000000| 0.2527088   7615    <span class="c">/ resting: earned the half-spread …</span>
-A   0D00:00:10.000000000| 0.1859661   7615
-A   0D00:01:00.000000000| 0.009100398 7615    <span class="c">/ … and it is gone in a minute</span>
-I   0D00:00:01.000000000| 0.04213108  9948
-I   0D00:00:10.000000000| 0.2171763   9948
-I   0D00:01:00.000000000| 0.1274421   9948
-M   0D00:00:01.000000000| 0.04944311  13879
-M   0D00:00:10.000000000| 0.2375413   13879
-M   0D00:01:00.000000000| 0.08989748  13879
-R   0D00:00:01.000000000| -0.4116726  32683    <span class="c">/ crossing: paid the spread, and it stays paid</span>
-R   0D00:00:10.000000000| -0.3823515  32683
-R   0D00:01:00.000000000| -0.6019815  32683</pre></div>
+liq horizon             | averageBps n
+------------------------| ----------------
+A   0D00:00:01.000000000| 0.2073834  19640    <span class="c">/ resting: earned part of the half-spread …</span>
+A   0D00:00:10.000000000| 0.1723714  19640
+A   0D00:01:00.000000000| -0.1459077 19640    <span class="c">/ … and a minute later it is gone, and more</span>
+I   0D00:00:01.000000000| 0.03822375 25720
+I   0D00:00:10.000000000| 0.1075748  25720
+I   0D00:01:00.000000000| 0.04346224 25720
+M   0D00:00:01.000000000| 0.04080127 35150
+M   0D00:00:10.000000000| 0.1333955  35150
+M   0D00:01:00.000000000| 0.1718593  35150
+R   0D00:00:01.000000000| -0.4188969 80504    <span class="c">/ crossing: paid the spread, and it stays paid</span>
+R   0D00:00:10.000000000| -0.3229491 80504
+R   0D00:01:00.000000000| -0.399682  80504</pre></div>
     </div>
   </div>
 
@@ -2416,32 +2472,32 @@ R   0D00:01:00.000000000| -0.6019815  32683</pre></div>
       <div class="code"><pre><span class="c">/ beyond.q — in-limit VWAP, and the marketable / limited split</span>
 / VWAP over only the prints a limit order could have traded against
 .b.limVwap:{[trade;sy;startTime;endTime;side;lim]
-  v:trade where (trade`sym)=sy; v@:where v[`time] within (startTime;endTime);
+  v:select px,size from trade where sym=sy, time within (startTime;endTime);
   v@:where $[side="B"; v[`px]&lt;=lim; v[`px]&gt;=lim];   / in-limit only
   $[count v; (v`size) wavg v`px; 0n] };
 
 / one row per parent: marketable or limited, with its limit
 .b.cohort:{[ord]
   update cohort:?[ordType="M";`marketable;`limited] from
-    select ordType:last ordType, limitPx:last limitPx by parentOrderID from ord where msgType=`NEW };
+    select ordType:last ordType, limitPx:last limitPx by parentOrderID from ord where msgType=`NEW, null algoOrderID };
 
 <span class="c">/ keep the two cohorts apart</span>
 q)select n:count i, avgSlip:avg slipBps, avgFillRate:avg fillRate,
     unfinished:sum fillRate&lt;1 by cohort from cohorts[]
-cohort    | n   avgSlip     avgFillRate unfinished
+cohort    | n    avgSlip    avgFillRate unfinished
 ----------| --------------------------------------
-limited   | 308 -0.06402538 0.8025634   103    <span class="c">/ a limit waits: a better price, a fifth left unfilled</span>
-marketable| 721 -0.9282599  0.9956585   5
+limited   | 779  0.1954001  0.8273343   233    <span class="c">/ a limit waits: a better price, 17% left unfilled</span>
+marketable| 1734 -0.8818207 0.9993659   4
 
 <span class="c">/ score a limited order against the tape it could actually have hit</span>
 q)5#select parentOrderID,sym,side,limitPx,averageFillPrice,vwap,inLimitVwap from limited[]
-parentOrderID sym  side limitPx  averageFillPrice vwap     inLimitVwap
-----------------------------------------------------------------------
-P10123        JPM  S    202.0823 202.1123         202.1111 202.1133
-P1022         NVDA B    121.7288 121.7072         121.7049 121.7047
-P10370        AMZN S    178.9976 179.0042         179.0057 179.0066
-P10557        NVDA B    121.6049 121.5832         121.5771 121.577
-P11385        META S    503.3111 503.4499         503.4505 503.4503</pre></div>
+parentOrderID sym   side limitPx  averageFillPrice vwap     inLimitVwap
+-----------------------------------------------------------------------
+P10000        TSLA  B    244.4554 244.3912         244.3887 244.3887
+P100263       AAPL  S    182.6924 182.7225         182.729  182.7291
+P100388       TSLA  B    244.4114 244.3667         244.3588 244.3587
+P100570       GOOGL S    166.0947 166.1719         166.18   166.1799
+P100689       TSLA  S    244.3381 244.3547         244.3632 244.3636</pre></div>
     </div>
   </div>
 
@@ -2483,17 +2539,17 @@ P11385        META S    503.3111 503.4499         503.4505 503.4503</pre></div>
       <div class="code"><pre>q)5#pwp[]
 parentOrderID sym  side arrivalTime          filled averageFillPrice pwp      cheapest dearest  landed
 ---------------------------------------------------------------------------------------------------------
-P1            AAPL S    0D05:18:51.369542000 5000   182.3895         182.39   182.3786 182.4012 0.5182537
-P11           AAPL B    0D05:18:52.068143000 13000  182.3898         182.3783 182.3648 182.3939 0.8604666
-P33           JPM  B    0D05:18:53.768316000 10000  201.8109         201.8033 201.7879 201.8157 0.8258098
-P39           NVDA S    0D05:18:53.968793000 2000   121.6798         121.68   121.6739 121.6856 0.4969697
-P73           JPM  S    0D05:18:55.468743000 31000  201.7492         201.7569 201.7309 201.7922 0.7018055
+P1            AAPL S    0D08:31:46.501987000 5000   182.4033         182.4095 182.4021 182.4178 0.9244818
+P10           AAPL B    0D08:31:47.103084000 37000  182.3841         182.3767 182.3564 182.4015 0.6147032
+P45           TSLA S    0D08:31:48.501723000 8000   244.1903         244.1936 244.1733 244.2085 0.5163964
+P61           TSLA S    0D08:31:48.901854000 16000  244.1806         244.1801 244.1556 244.2024 0.4655868
+P78           AMZN B    0D08:31:49.301177000 18000  178.9107         178.8997 178.8877 178.9227 0.6589703
 
 q)select n:count i, avgLanded:avg landed, medLanded:med landed by side from pwp[]
-side| n   avgLanded medLanded
-----| -----------------------
-B   | 535 0.6334569 0.6228367
-S   | 494 0.5670059 0.6157844    <span class="c">/ 0 = best achievable, 1 = worst</span></pre></div>
+side| n    avgLanded medLanded
+----| ------------------------
+B   | 1290 0.5925995 0.6050725
+S   | 1222 0.5217648 0.6037041    <span class="c">/ 0 = best achievable, 1 = worst</span></pre></div>
     </div>
   </div>
 
@@ -2519,11 +2575,11 @@ S   | 494 0.5670059 0.6157844    <span class="c">/ 0 = best achievable, 1 = wors
 q)bands[]
 dt  bps
 --------------
--5s -0.3485869
--1s -0.2339475
-t   -0.2122911
-+1s -0.1625728
-+5s -0.1440234    <span class="c">/ a fifth of a basis point of swing across ten seconds of clock</span></pre></div>
+-5s -0.2638966
+-1s -0.2052291
+t   -0.2042839
++1s -0.1691318
++5s -0.150017    <span class="c">/ a tenth of a basis point of swing across ten seconds of clock</span></pre></div>
     </div>
   </div>
 
@@ -2543,21 +2599,22 @@ t   -0.2122911
   w:select startTime:min time, endTime:max time by parentOrderID
       from execs where execType="F";
   a:a lj w;
-  mv:{[q;sy;startTime;endTime] b:q where (q`sym)=sy; m:0.5*b[`bid]+b`ask;
-       m0:last m where b[`time]&lt;=startTime; m1:last m where b[`time]&lt;=endTime;
+  mv:{[q;sy;startTime;endTime]
+       m0:exec last 0.5*bid+ask from q where sym=sy, time&lt;=startTime;
+       m1:exec last 0.5*bid+ask from q where sym=sy, time&lt;=endTime;
        1e4*(m1-m0)%m0}[quote];
   mk:mv'[a`sym;a`startTime;a`endTime];
   update mktBps:neg .b.buyorsell[side]*mk,
          execBps:slipBps+.b.buyorsell[side]*mk from a };
 
 q)5#select parentOrderID,sym,side,slipBps,mktBps,execBps from context[]
-parentOrderID sym  side slipBps    mktBps    execBps
--------------------------------------------------------
-P1            AAPL S    -0.7377269 -1.585256 0.8475296
-P11           AAPL B    0.4059554  1.238949  -0.8329931    <span class="c">/ looked good; the market did it</span>
-P33           JPM  B    -0.1406248 0.1296966 -0.2703214
-P39           NVDA S    -0.1830865 0.5144139 -0.6975005
-P73           JPM  S    -2.604371  -4.864617 2.260246    <span class="c">/ looked bad; the desk did well against it</span></pre></div>
+parentOrderID sym  side slipBps    mktBps     execBps
+--------------------------------------------------------
+P1            AAPL S    0.01998641 -0.9369865 0.9569729    <span class="c">/ looked flat; the desk beat a falling market</span>
+P10           AAPL B    1.337257   1.301186   0.03607051    <span class="c">/ looked good; the market did it</span>
+P45           TSLA S    -0.7698873 -1.296556  0.5266692
+P61           TSLA S    -1.424711  -0.6151533 -0.8095581
+P78           AMZN B    0.1879276  1.004098   -0.81617</pre></div>
     </div>
   </div>
 
@@ -2582,11 +2639,11 @@ P73           JPM  S    -2.604371  -4.864617 2.260246    <span class="c">/ looke
 q)5#peers[]
 parentOrderID sym  side lastPx   lastQty arrivalMid szBucket cost       pct
 --------------------------------------------------------------------------------
-P1            AAPL S    182.3929 700     182.4029   lg       -0.5482368 57.33996    <span class="c">/ better than 57% of large sells</span>
-P1            AAPL S    182.3977 300     182.4029   md       -0.2845618 56.58974
-P1            AAPL S    182.3877 700     182.4029   lg       -0.8327986 47.88447
-P1            AAPL S    182.3975 600     182.4029   lg       -0.2968758 65.08462
-P1            AAPL S    182.3875 600     182.4029   lg       -0.8451127 47.55335</pre></div>
+P1            AAPL S    182.4124 300     182.4029   md       0.5200659  69.69639    <span class="c">/ better than 70% of medium-sized sells</span>
+P1            AAPL S    182.4043 300     182.4029   md       0.07643537 62.9363
+P1            AAPL S    182.3946 200     182.4029   sm       -0.4578042 50.22507
+P1            AAPL S    182.4079 400     182.4029   md       0.2710532  66.12919
+P1            AAPL S    182.4099 400     182.4029   md       0.3816425  67.68724</pre></div>
     </div>
   </div>
 
@@ -2607,9 +2664,54 @@ P1            AAPL S    182.3875 600     182.4029   lg       -0.8451127 47.55335
   <h3 id="aw-wheel"><span class="n">3</span>What the Wheel Does</h3>
   <p class="lead">An <b>algo wheel</b> is the fix.<span class="mnote"><b>Why “wheel”.</b> It began as a way to strip out trader bias when comparing brokers: assign orders by a fixed rota, not by preference, so every algo is judged on a fair, comparable sample.</span> In its simplest form it is just a rule that spreads orders across the available algos — often partly at random — so each one gets a fair sample of comparable orders instead of only the orders a trader happened to trust it with. Then you score them with the TCA you've already built. The wheel "turns": algos that execute cheaply under the conditions they faced earn more of the flow, the ones that don't earn less. It is A/B testing for execution, run continuously.</p>
   <p class="notice"><b>Two different decisions, two different levels.</b> The <i>wheel</i> chooses which <b>algo</b> gets the <b>parent</b> order — one decision, taken once, at the top. The algo's own <b>smart order router</b> (SOR) then chooses which <b>venue</b> gets each <b>child</b> slice — thousands of decisions, taken in microseconds, inside the broker. Both are measured by the same arithmetic, but from different tables and on different clocks: the wheel is judged on arrival slippage per <code>algoOrderID</code> (<code>algoArrival[]</code>), over days of flow; the SOR is judged on <code>markout</code> and <code>spreads</code> per <code>venue</code>, over individual fills. A venue scorecard that looks terrible can be an SOR problem inside an algo the wheel is right to keep — so read §Venue Scorecard before you reroute, and the wheel before you reweight.</p>
+  <figure id="fig-layers">
+    <div class="fig">
+<svg viewBox="0 0 760 360" role="img" aria-label="TCA attaches at every level of the order. The parent is scored on arrival slippage, opportunity cost and fill rate. The algo order is scored on algo slippage, fill rate and stability; those two levels feed the algo wheel, which decides which algo gets the next parent. The child is scored on venue, resting or taking, queue and order-flow imbalance, and the fill on effective and realised spread and markouts; those two levels feed the router, which decides which venue gets the next child.">
+  <defs><marker id="lv" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+  <text x="20" y="24" font-family="JetBrains Mono,monospace" font-size="10.5" fill="var(--muted)">LEVEL</text><text x="196" y="24" font-family="JetBrains Mono,monospace" font-size="10.5" fill="var(--muted)">WHAT IS MEASURED THERE</text><text x="600" y="24" font-family="JetBrains Mono,monospace" font-size="10.5" fill="var(--muted)">WHO READS IT</text>
+  <rect x="20" y="40" width="150" height="50" rx="6" fill="var(--sheet)" stroke="var(--accent)" stroke-width="1.4"/>
+  <text x="95" y="61" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="12.5" font-weight="600" fill="var(--accent)">PARENT</text>
+  <text x="95" y="78" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--muted)">the PM’s order</text>
+  <text x="196" y="61" font-family="Schibsted Grotesk,sans-serif" font-size="12" fill="var(--fg)">arrival slippage · opportunity cost · fill rate</text>
+  <text x="196" y="79" font-family="JetBrains Mono,monospace" font-size="10.5" fill="var(--accent)">arrival[]  .b.shortfall</text>
+  <line x1="95" y1="90" x2="95" y2="118" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#lv)"/>
+  <rect x="20" y="120" width="150" height="50" rx="6" fill="var(--sheet)" stroke="var(--accent)" stroke-width="1.4"/>
+  <text x="95" y="141" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="12.5" font-weight="600" fill="var(--accent)">ALGO ORDER</text>
+  <text x="95" y="158" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--muted)">one algo’s share</text>
+  <text x="196" y="141" font-family="Schibsted Grotesk,sans-serif" font-size="12" fill="var(--fg)">algo slippage · fill rate · stability</text>
+  <text x="196" y="159" font-family="JetBrains Mono,monospace" font-size="10.5" fill="var(--accent)">algoArrival[]  algoScorecard[]</text>
+  <line x1="95" y1="170" x2="95" y2="198" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#lv)"/>
+  <rect x="20" y="200" width="150" height="50" rx="6" fill="var(--sheet)" stroke="var(--sh)" stroke-width="1.4"/>
+  <text x="95" y="221" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="12.5" font-weight="600" fill="var(--sh)">CHILD</text>
+  <text x="95" y="238" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--muted)">one placement</text>
+  <text x="196" y="221" font-family="Schibsted Grotesk,sans-serif" font-size="12" fill="var(--fg)">venue · rest or take · queue · OFI</text>
+  <text x="196" y="239" font-family="JetBrains Mono,monospace" font-size="10.5" fill="var(--accent)">ord  ofi[]</text>
+  <line x1="95" y1="250" x2="95" y2="278" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#lv)"/>
+  <rect x="20" y="280" width="150" height="50" rx="6" fill="var(--sheet)" stroke="var(--sh)" stroke-width="1.4"/>
+  <text x="95" y="301" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="12.5" font-weight="600" fill="var(--sh)">FILL</text>
+  <text x="95" y="318" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--muted)">one execution</text>
+  <text x="196" y="301" font-family="Schibsted Grotesk,sans-serif" font-size="12" fill="var(--fg)">effective &amp; realised spread · markouts · fees</text>
+  <text x="196" y="319" font-family="JetBrains Mono,monospace" font-size="10.5" fill="var(--accent)">spreads[]  markouts[]  fees[]</text>
+  <path d="M560 44 H572 V166 H560" fill="none" stroke="var(--accent)" stroke-width="1.4"/>
+  <line x1="572" y1="105" x2="592" y2="105" stroke="var(--accent)" stroke-width="1.4"/>
+  <rect x="592" y="73" width="152" height="64" rx="6" fill="var(--sheet)" stroke="var(--accent)" stroke-width="1.4"/>
+  <text x="668" y="94" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="12.5" font-weight="600" fill="var(--accent)">THE WHEEL</text>
+  <text x="668" y="110" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="10" fill="var(--muted)">which algo gets the next parent</text>
+  <text x="668" y="126" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="var(--accent)">algoScorecard[]  wheelPaired[]</text>
+  <path d="M560 204 H572 V326 H560" fill="none" stroke="var(--sh)" stroke-width="1.4"/>
+  <line x1="572" y1="265" x2="592" y2="265" stroke="var(--sh)" stroke-width="1.4"/>
+  <rect x="592" y="233" width="152" height="64" rx="6" fill="var(--sheet)" stroke="var(--sh)" stroke-width="1.4"/>
+  <text x="668" y="254" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="12.5" font-weight="600" fill="var(--sh)">THE ROUTER (SOR)</text>
+  <text x="668" y="270" text-anchor="middle" font-family="Schibsted Grotesk,sans-serif" font-size="10" fill="var(--muted)">which venue gets the next child</text>
+  <text x="668" y="286" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="var(--accent)">scorecard[]  by venue</text>
+</svg>
+    </div>
+    <figcaption><b>TCA attaches at every level.</b> The same order is measured four times, once at each level of the hierarchy, and each level’s numbers answer a different decision. The top two feed the algo wheel, which assigns the next parent to an algo; the bottom two feed the router, which sends the next child to a venue. A cost that shows up at one level can be caused at another, which is why the ids that tie the levels together matter more than any single benchmark.</figcaption>
+  </figure>
+
   <figure id="fig-wheel">
     <div class="fig">
-<svg viewBox="0 0 760 430" role="img" aria-label="The algo wheel as a cycle. Conditions (spread, order-flow imbalance, size) feed the router, which picks the algo for the parent. The algo's own smart order router places the children, which produces fills. TCA measures slippage and markouts. A learning step regresses the drivers to update the weights, which feed back into the router. The cycle repeats.">
+<svg viewBox="0 0 760 430" role="img" aria-label="The algo wheel as a cycle. Conditions (spread, order-flow imbalance, size) feed the assignment step, which picks the algo for the parent. The algo's own smart order router places the children, which produces fills. TCA measures slippage and markouts. A learning step regresses the drivers to update the weights, which feed back into the router. The cycle repeats.">
   <defs><marker id="aw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker></defs>
   <!-- rim arcs, clockwise -->
   <g fill="none" stroke="var(--accent)" stroke-width="1.5">
@@ -2631,7 +2733,7 @@ P1            AAPL S    182.3875 600     182.4029   lg       -0.8451127 47.55335
     </g>
     <g>
       <rect x="455" y="141" width="136" height="46" rx="6" fill="var(--sheet)" stroke="var(--accent)" stroke-width="1.4"/>
-      <text x="523" y="161" font-size="12.5" font-weight="600" fill="var(--accent)">ROUTER</text>
+      <text x="523" y="161" font-size="12.5" font-weight="600" fill="var(--accent)">ASSIGN</text>
       <text x="523" y="178" font-size="10.5" fill="var(--muted)">pick the algo</text>
     </g>
     <g>
@@ -2682,27 +2784,57 @@ wheel:{ f:.b.wheelData[algoOrd;execs;ord];
   ([] driver:`VWAP`POV`ARRIVAL`DARK`limited`sizeK; bpsPerUnit:r 0; stdErr:r 1; tStat:r[0]%r 1) };
 
 <span class="c">/ first the plain scorecard: cost and completeness, per algo</span>
-q)algos[]
-algo    algoOrders shares  avgSlipBps medSlipBps sharesWtdBps fillRate
------------------------------------------------------------------------
-ARRIVAL 395        5653700 -1.015779  -0.8630931 -1.031248    0.9770298    <span class="c">/ costliest price, best fill rate</span>
-DARK    339        4612800 -0.6080558 -0.438736  -0.7699866   0.9286145
-POV     360        4442600 -0.6766704 -0.6314343 -0.7888408   0.934858
-VWAP    358        4772900 -0.417383  -0.4055511 -0.2783684   0.91117    <span class="c">/ cheapest price, worst fill rate</span>
+q)algoScorecard[]
+algo    algoOrders shares   avgFillRate medFillRate avgSlipBps medSlipBps sharesWtdBps slipStd  stdErr
+----------------------------------------------------------------------------------------------------------
+ARRIVAL 889        12193300 0.9645511   1           -0.9438962 -0.9190412 -0.9846396   1.042418 0.03496158    <span class="c">/ dearest price, best fill rate</span>
+DARK    852        11560900 0.9503494   1           -0.2199949 -0.3319526 -0.132065    2.294022 0.07863806
+POV     891        11925800 0.9524937   1           -0.6101725 -0.5764881 -0.631195    1.938056 0.06492731
+VWAP    882        12162500 0.9252422   1           -0.4822408 -0.4337346 -0.3823316   2.913791 0.09811244    <span class="c">/ worst fill rate: it rests, and gets left behind</span>
 
 <span class="c">/ then the fit: each algo against VWAP, holding limit and size fixed</span>
 q)wheel[]
-driver  bpsPerUnit  stdErr     tStat
+driver   bpsPerUnit stdErr     tStat
 ----------------------------------------
-VWAP    -0.5926675  0.1335726  -4.437043
-POV     -0.2795732  0.1469946  -1.901928    <span class="c">/ not yet distinguishable from VWAP</span>
-ARRIVAL -0.5691222  0.1436022  -3.963187    <span class="c">/ about 0.6 bps dearer than VWAP, and real: t ≈ −4</span>
-DARK    -0.1847871  0.1490797  -1.239519    <span class="c">/ nor this</span>
-limited 0.8366045   0.112571   7.431792    <span class="c">/ a limit earns most of a basis point</span>
-sizeK   -0.05584841 0.05047364 -1.106487</pre></div>
-  <p>Read the two tables together. The scorecard says the arrival algo got the worst price and VWAP the best, which on its own would route everything to VWAP. The fill-rate column says why not: VWAP left 9% of its shares unfilled against the arrival algo’s 2%, because it rests and waits, and when the price runs away from a resting order the order is simply left behind. The fit then says how much of the price difference is real. Only the arrival algo’s is: about 0.6 bps, four standard errors from zero. POV and Dark are within noise of VWAP after 23 minutes of flow.</p>
-  <p>That is the honest output of an algo wheel. Assignment is random, so the comparison is fair, but most of the differences a desk cares about are a few tenths of a basis point, and it takes a lot of flow to resolve them. A wheel that reweights on the first week’s averages is reweighting on noise; one that waits for the standard errors to shrink is not. <code>drivers[]</code> fits the same slippage on <i>how</i> each order was traded — passive share, venue mix, participation — and is the place to look for why an algo costs what it does, but not for which algo to choose: those are things the algo does, so they would soak up the very effect the wheel is trying to measure.</p>
-  <p>This is the whole argument of multi-dimensional TCA (<i>Talos</i>, <i>Sparrow</i>): the benchmarks were never meant to be more numbers for a report — they are the feedback the router reads. And the regression that fits them is one line of q, <code>(inv flip[X] mmu X) mmu flip[X] mmu y</code>, over the very same <code>execs</code> and <code>quote</code> tables every other lab in this document used.</p>
+VWAPbase -0.8645419 0.09760297 -8.857742    <span class="c">/ intercept: a market VWAP order of zero size</span>
+POV      -0.1170416 0.1054313  -1.110122
+ARRIVAL  -0.4659219 0.09722143 -4.792379    <span class="c">/ relative to VWAP; clustered by parent</span>
+DARK     0.2709848  0.1159632  2.336817    <span class="c">/ relative to VWAP</span>
+limited  1.034148   0.07544191 13.70787
+sizeK    0.03793342 0.04389016 0.8642807</pre></div>
+  <p>Read the two tables together. The scorecard says the arrival algo got the worst price and Dark the best, which on its own would send everything to Dark. The fill-rate column says why not to stop there: VWAP left 7.5% of its shares unfilled against the arrival algo’s 3.5%, because it rests and waits, and when the price runs away from a resting order the order is simply left behind. The fit then asks how much of each price difference stands out from noise, with its standard errors <i>clustered</i> by parent, because the two halves of a split parent trade through the same market and are not independent.</p>
+  <p>Even so, the pooled fit is fragile. Over shorter runs of this same stack it told different stories: in one 23-minute run only Arrival stood out, in a 13-minute run only Dark did. Every algo is measured against VWAP, and VWAP’s own average moves with whatever the market happened to do while its orders were working. The fix is a design a wheel gets almost for free. When a parent is split between two algos, both halves trade through the same prices at the same time, so the <i>difference</i> between them has the market taken out.</p>
+  <div class="code"><pre><span class="c">/ beyond.q — one row per split parent: which two algos, and the differences</span>
+.b.wheelPairs:{[algoOrd;execs]
+  a:select parentOrderID, algo, slipBps, fillRate, sizeK:qty%10000
+      from .b.algoArrival[algoOrd;execs] where not null slipBps;
+  a:select from a where 2=(count;i) fby parentOrderID;    / both halves traded
+  0!select algo1:first algo, algo2:last algo,
+      dSlip:(first slipBps)-last slipBps, dFill:(first fillRate)-last fillRate,
+      dSize:(first sizeK)-last sizeK
+    by parentOrderID from a };
+
+<span class="c">/ engine.q — fit the differences: no intercept, because the market, the limit</span>
+<span class="c">/ and the parent's own signal are the same for both halves and cancel</span>
+wheelPaired:{ p:.b.wheelPairs[algoOrd;execs];
+  d:{[p;k] (`float$p[`algo1]=k)-`float$p[`algo2]=k}[p];
+  X:flip (d`POV; d`ARRIVAL; d`DARK; p`dSize);
+  s:.b.olsFit[X; p`dSlip]; f:.b.olsFit[X; p`dFill];
+  ([] driver:`POV`ARRIVAL`DARK`sizeK; slipBps:s 0; slipSE:s 1; slipT:s[0]%s 1;
+      fillRate:f 0; fillSE:f 1) };
+
+q)count .b.wheelPairs[algoOrd;execs]
+1001
+q)wheelPaired[]
+driver  slipBps     slipSE     slipT     fillRate    fillSE
+----------------------------------------------------------------
+POV     -0.09222666 0.0827877  -1.114014 0.03239336  0.0065232    <span class="c">/ no price difference you can see</span>
+ARRIVAL -0.3021686  0.08293203 -3.643569 0.05323769  0.006534572    <span class="c">/ dearer, but fills 5 points more</span>
+DARK    0.2480922   0.08318494 2.982417  0.01073572  0.0065545    <span class="c">/ cheaper, fills about the same</span>
+sizeK   -0.1246076  0.1000023  -1.246047 -0.01317544 0.00787961</pre></div>
+  <p>On 1,001 split parents, relative to VWAP: Arrival costs 0.30 bps more and fills 5.3 points more; Dark costs 0.25 bps less and fills about the same; POV is indistinguishable on price and fills 3 points more. Those are the trade-offs built into the simulator, recovered with standard errors near 0.08 bps from 2,002 algo orders, tighter than the pooled fit manages from 3,514. Fill rate is pinned down far more tightly still, to well under a point, because whether an order completes depends much less on what the market does than its price.</p>
+  <p>That is the honest output of an algo wheel. Random assignment reduces selection bias, and pairing removes the market, but the differences a desk cares about are still a few tenths of a basis point, and they take thousands of orders to resolve. A wheel that reweights on the first week’s averages is reweighting on noise; one that waits for the standard errors to shrink, and prefers paired comparisons where it has them, is not. <code>drivers[]</code> fits the same slippage on <i>how</i> each order was traded — passive share, venue mix, participation — and is the place to look for why an algo costs what it does, but not for which algo to choose: those are things the algo does, so they would soak up the very effect the wheel is trying to measure.</p>
+<p>This is the whole argument of multi-dimensional TCA (<i>Talos</i>, <i>Sparrow</i>): the benchmarks were never meant to be more numbers for a report — they are the feedback the router reads. And the regression that fits them is one line of q, <code>(inv flip[X] mmu X) mmu flip[X] mmu y</code>, over the very same <code>execs</code> and <code>quote</code> tables every other lab in this document used.</p>
 </section>
 
 <!-- ───────────── MISTAKES ───────────── -->

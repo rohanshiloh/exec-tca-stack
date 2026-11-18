@@ -11,6 +11,7 @@ TP:$[count .z.x; first .z.x; ":5013"];
 .u.end:{[d] {@[`.;x;0#]} each `quote`trade`ord`execs;
   @[;`sym;`g#] each `quote`trade`ord`execs;
   delete from `parent; delete from `algoOrd;
+  topMid::(`symbol$())!`float$();                   / no stale mid from yesterday
   -1"end of day ",string[d],": intraday state cleared"; };
 
--1"tca → subscribed @ ",TP,"   try:  arrival[]  markouts[]  scorecard[]  ofi[]";
+-1"tca → subscribed @ ",TP,"   try:  arrival[]  scorecard[]  algoScorecard[]  wheelPaired[]";

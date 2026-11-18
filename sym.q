@@ -1,7 +1,7 @@
 / exec-tca-stack : schema
-/ One event table per message class. Orders are a hierarchy: a parent (the PM's
-/ order) is worked as one or more algo orders (one per broker algo), each sliced
-/ into child orders, each of which may fill several times.
+/ Orders are a hierarchy: a parent (the PM's order) is worked as one or more
+/ algo orders (one per broker algo), each sliced into child orders, each of
+/ which may fill several times.
 / One event table per message class. tick.q loads this as its schema file,
 / so every table must open with `time`sym (tick.q enforces 2#key = `time`sym)
 / and carry `g#sym for fast by-sym selection in the RDB and CEP.

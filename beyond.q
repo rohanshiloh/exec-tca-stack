@@ -113,11 +113,18 @@
   e:y-X mmu b; s2:(e wsum e)%count[y]-count b;
   (b; sqrt s2*xi@'til count b) };
 
+/ the same, with standard errors that allow for orders in a cluster (here, the
+/ algo orders of one parent) sharing a market: they are not independent draws.
+.b.olsCluster:{[X;y;g] xi:inv flip[X] mmu X; b:xi mmu flip[X] mmu y; e:y-X mmu b;
+  m:sum {[X;e;i] v:flip[X i] mmu e i; v*/:v}[X;e] each value group g;
+  G:count distinct g;
+  (b; sqrt (G%G-1)*(xi mmu m mmu xi)@'til count b) };
+
 / one row per algo order: its slippage, which algo it went to, and two controls.
 / VWAP is the base, so each flag reads "bps relative to VWAP".
 .b.wheelData:{[algoOrd;execs;ord]
   a:.b.algoArrival[algoOrd;execs] lj .b.cohort ord;
-  select algoOrderID, algo, slipBps,
+  select algoOrderID, parentOrderID, algo, slipBps,
          isPOV:`float$algo=`POV, isARRIVAL:`float$algo=`ARRIVAL, isDARK:`float$algo=`DARK,
          limited:`float$cohort=`limited, sizeK:qty%10000
     from a where not null slipBps };
@@ -132,3 +139,16 @@
   select parentOrderID, slipBps, limited:`float$cohort=`limited, pov, sizeK:qty%10000,
          passiveShare, toxicShare, darkShare
     from t where not null slipBps, not null pov, pov<0w };
+
+/ ── the paired wheel: one parent, two algos, one market ───────────────────
+/ When a parent is split across two algos, both halves trade through the same
+/ prices at the same time, so the difference between them has the market taken
+/ out. One row per split parent: which two algos, and the differences.
+.b.wheelPairs:{[algoOrd;execs]
+  a:select parentOrderID, algo, slipBps, fillRate, sizeK:qty%10000
+      from .b.algoArrival[algoOrd;execs] where not null slipBps;
+  a:select from a where 2=(count;i) fby parentOrderID;    / both halves traded
+  0!select algo1:first algo, algo2:last algo,
+      dSlip:(first slipBps)-last slipBps, dFill:(first fillRate)-last fillRate,
+      dSize:(first sizeK)-last sizeK
+    by parentOrderID from a };

@@ -57,7 +57,7 @@ pov:{ .b.participation[parent;trade;execs] };
 vcurve:{ .b.volcurve trade };
 closes:{ .b.closePx trade };
 algoArrival:{ .b.algoArrival[algoOrd;execs] };         / slippage per algo order
-algos:{ .b.algoScorecard algoArrival[] };               / and per algo: what the wheel reads
+algoScorecard:{ .b.algoScorecard algoArrival[] };       / and per algo: what the wheel reads
 
 / beyond-vanilla wrappers (beyond.q)
 robust:{ .b.robustArrival[parent;quote;0D00:00:01] };
@@ -74,10 +74,24 @@ peers:{ .b.pctScore[parent;execs] };
 / Each coefficient is bps relative to VWAP, after allowing for limit and size.
 wheel:{ f:.b.wheelData[algoOrd;execs;ord];
   X:flip (count[f]#1f; f`isPOV; f`isARRIVAL; f`isDARK; f`limited; f`sizeK);
-  r:.b.olsFit[X; f`slipBps];
-  ([] driver:`VWAP`POV`ARRIVAL`DARK`limited`sizeK; bpsPerUnit:r 0; stdErr:r 1; tStat:r[0]%r 1) };
+  r:.b.olsCluster[X; f`slipBps; f`parentOrderID];       / errors clustered by parent
+  / VWAPbase is the intercept: a market VWAP order of zero size. The algo rows are
+  / DIFFERENCES from it, so ARRIVAL's total is VWAPbase + ARRIVAL.
+  ([] driver:`VWAPbase`POV`ARRIVAL`DARK`limited`sizeK; bpsPerUnit:r 0; stdErr:r 1; tStat:r[0]%r 1) };
+/ the paired wheel: the same question asked only of parents split across two
+/ algos, on the differences between the halves. No intercept: the market, the
+/ limit and the parent's signal are the same for both halves, so they cancel.
+/ Each row is bps (or fill rate) relative to VWAP.
+wheelPaired:{ p:.b.wheelPairs[algoOrd;execs];
+  d:{[p;k] (`float$p[`algo1]=k)-`float$p[`algo2]=k}[p];
+  X:flip (d`POV; d`ARRIVAL; d`DARK; p`dSize);
+  s:.b.olsFit[X; p`dSlip]; f:.b.olsFit[X; p`dFill];
+  ([] driver:`POV`ARRIVAL`DARK`sizeK; slipBps:s 0; slipSE:s 1; slipT:s[0]%s 1;
+      fillRate:f 0; fillSE:f 1) };
+
 / why: the same slippage per parent, fitted on how each one was traded
 drivers:{ f:.b.wheelFeatures[parent;trade;execs;ord];
   X:flip (count[f]#1f; f`limited; f`pov; f`sizeK; f`passiveShare; f`toxicShare; f`darkShare);
+  r:.b.olsFit[X; f`slipBps];
   ([] driver:`intercept`limited`pov`sizeK`passiveShare`toxicShare`darkShare;
-      bpsPerUnit:.b.wheelFit[X; f`slipBps]) };
+      bpsPerUnit:r 0; stdErr:r 1; tStat:r[0]%r 1) };

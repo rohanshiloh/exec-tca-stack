@@ -21,8 +21,8 @@ vol:0.00001+0.000004*til n;                   / per-step volatility per sym (~0.
 / fills are not helped or hurt by its own routing; the dark venues leak nothing.
 toxF:venues!(-0.4 -0.4 -0.4 0.8 0.0 0.0);    / EDGX: damage inside the first second
 toxS:venues!(-0.5 -0.5 0.45 0.05 0.0 0.0);   / BATS: damage that keeps arriving
-alpha:1.5;                                    / the PM's edge: bps the price drifts his way, on average
-impK:0.02; impDecay:0.85;                     / impact per 100 shares, and how fast it fades per tick
+alpha:1.5;                                    / the decision's signal: bps the price drifts the order's way, on average
+impK:0.02; impDecay:0.85;                     / impact per 100 shares, and how fast it partly fades per tick
 pool:`ARCA`NSDQ`BATS`EDGX`EDGX`BATS`MLIT`INTL; / default router mix (lit-heavy, some dark/house)
 litPool:`ARCA`NSDQ`BATS`EDGX`EDGX`BATS;        / sweep the lit book only
 darkPool:`MLIT`MLIT`INTL;                      / midpoint and house only
@@ -73,16 +73,18 @@ spawnParent:{ if[0.08<first 1?1f; :()];       / ~8% of ticks start a parent
   / 30% of parents carry a limit 1-3 bps through the arrival mid; the rest are market
   isLim:0.3>first 1?1f; ot:$[isLim;"L";"M"];
   lim:$[isLim; (mid s)*1+1e-4*sg*1+first 1?2f; 0n];
-  / the PM trades for a reason: the price tends to drift his way over the next half minute
+  / a parent carries a small directional signal: the price tends to drift its way
+  / over the next half minute. That is decision quality, separate from execution.
   @[`slowD; s; +; sg*alpha*first 1?2f];
   / the parent, as the OMS records it: no algo yet, no child
   pub[`ord;(enlist uni s; enlist p; enlist `; enlist `; enlist `; enlist sd; enlist ot;
             enlist q; enlist lim; enlist "0"; enlist `; enlist `NEW)];
-  / the trader hands it to one or two broker algos, picked at random. Random
-  / assignment is the wheel: it is what makes the algos comparable afterwards.
+  / the trader hands it to one or two DIFFERENT broker algos, picked at random.
+  / Random assignment reduces selection bias and gives each algo a comparable
+  / sample of flow; enough of it is what makes the comparison meaningful.
   q1:lot*floor 0.6*q%lot;                      / a 60/40 split, in whole lots
   qs:$[0.6>first 1?1f; enlist q; (q1; q-q1)];
-  k:count qs; ids:nid'[k#"A"]; al:algoNames k?count algoNames;
+  k:count qs; ids:nid'[k#"A"]; al:algoNames neg[k]?count algoNames;   / neg: deal, no repeats
   `active upsert ([] algoOrderID:ids; parentOrderID:k#p; sym:k#uni s; side:k#sd; algo:al;
     qty:qs; filledQty:k#0; limitPx:k#lim; born:k#nTick);
   pub[`ord;(k#uni s; k#p; ids; al; k#`; k#sd; k#ot; qs; k#lim; k#"0"; k#`SOR; k#`NEW)]; };
@@ -98,9 +100,11 @@ workOrders:{ if[0=count active; :()];
   c:count a; si:uni?a`sym; sg:?[(a`side)="B"; 1f; -1f]; r:a`route;
   vn:?[r=`lit; litPool c?count litPool; ?[r=`dark; darkPool c?count darkPool; pool c?count pool]];
   passive:(vn in lit) & (c?1f)<a`pPassive;
-  / A resting order only fills when someone comes to it: a resting buy is hit as the
-  / price falls, never as it rises. That selection IS adverse selection; the rebate
-  / is what a venue pays you to accept it.
+  / A resting order fills mainly when the market comes to it: here a resting buy is
+  / hit as the price falls or holds, never as it rises. That makes adverse selection
+  / possible, where filling every resting order by construction would hide it; the
+  / rebate is what a venue pays you to accept it. (Real queues also fill through
+  / queue advance and contra flow; this feed keeps only the price-driven part.)
   k:where not passive & 0<sg*(mid si)-prevMid si;
   if[0=count k; :()];
   a:a k; vn:vn k; passive:passive k; si:si k; sg:sg k; c:count k;
@@ -113,9 +117,9 @@ workOrders:{ if[0=count active; :()];
   / functional amend: accumulates when two orders hit the same sym in one tick
   @[`fastD; si; +; neg sg*toxF vn];             / the venue's after-effect, against the trader
   @[`slowD; si; +; neg sg*toxS vn];
-  imp:sg*impK*slice%lot;                        / our own impact: moves the price now, fades later
+  imp:sg*impK*slice%lot;                        / our own impact: moves the price now, then partly fades
   @[`impD; si; +; imp]; @[`mid; si; *; 1+1e-4*imp];
-  cum:a[`filledQty]+slice; lv:a[`qty]-cum;      / CumQty and LeavesQty are per algo order
+  cum:a[`filledQty]+slice; lv:a[`qty]-cum;      / per algo order, mirroring FIX CumQty / LeavesQty
   pub[`execs;(a`sym; a`parentOrderID; a`algoOrderID; a`algo; nid'[c#"C"]; a`side; c#"F";
              px; slice; lv; cum; vn; liq)];
   pub[`trade;(a`sym; vn; px; slice)];           / our own fills print on the tape too

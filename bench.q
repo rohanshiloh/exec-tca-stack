@@ -39,10 +39,16 @@ algoArrival:{[algoOrd;execs]
   update slipBps:1e4*.b.buyorsell[side]*(arrivalMid-averageFillPrice)%arrivalMid,
          fillRate:(0^filled)%qty from a };
 
-/ per algo: cost and completeness side by side, never one without the other
+/ per algo: cost, completeness and stability side by side, never one alone.
+/ The algo-level twin of the venue scorecard: this one feeds the wheel, that one
+/ the router. stdErr is the uncertainty of avgSlipBps; comparing two algos is the
+/ wheel's job, not this table's.
 algoScorecard:{[aa] 0!select algoOrders:count i, shares:sum 0^filled,
-    avgSlipBps:avg slipBps, medSlipBps:med slipBps where not null slipBps, sharesWtdBps:(0^filled) wavg slipBps,
-    fillRate:avg fillRate by algo from aa };
+    avgFillRate:avg fillRate, medFillRate:med fillRate,
+    avgSlipBps:avg slipBps, medSlipBps:med slipBps where not null slipBps,
+    sharesWtdBps:(0^filled) wavg slipBps, slipStd:dev slipBps where not null slipBps,
+    stdErr:(dev slipBps where not null slipBps)%sqrt sum not null slipBps
+    by algo from aa };
 
 / ── VWAP (interval) ──────────────────────────────────────────────────────
 / the tape over each parent's own active window [first fill; last fill].

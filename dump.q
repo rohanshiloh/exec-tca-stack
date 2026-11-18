@@ -1,8 +1,9 @@
 / exec-tca-stack : write TCA diagnostics to tcaData.txt
 / usage, in the TCA tab:   \l dump.q      then   tcaDump[]
 / Each query is trapped, so one failure prints its error and the rest still run.
-/ The list ends with every prompt line the labs show, then rescue.q and replay.q
-/ run on a 5MB cut of today's tickerplant log (written to /tmp).
+/ After the benchmarks come the algo-wheel queries, every prompt line the labs
+/ show, rescue.q and replay.q on a 5MB cut of today's tickerplant log (written
+/ to /tmp), and finally checks on the other processes over handles.
 tcaQueries:(
   ".z.P";
   "tables[]!count each value each tables[]";
@@ -43,8 +44,11 @@ tcaQueries:(
   "5#.b.wheelFeatures[parent;trade;execs;ord]";
   "select algoOrders:count i, parents:count distinct parentOrderID by algo from algoOrd";
   "5#algoArrival[]";
-  "algos[]";
+  "algoScorecard[]";
   "wheel[]";
+  "count .b.wheelPairs[algoOrd;execs]";
+  "5#.b.wheelPairs[algoOrd;execs]";
+  "wheelPaired[]";
   "drivers[]";
   "select n:count i, avgPassive:avg liq=\"A\", avgDark:avg liq in \"MI\" by algo from execs";
   "5#select tot:distinct cumQty+leaves by algoOrderID from execs";
