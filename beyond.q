@@ -38,7 +38,7 @@
 / one row per parent: marketable or limited, with its limit
 .b.cohort:{[ord]
   update cohort:?[ordType="M";`marketable;`limited] from
-    select ordType:last ordType, limitPx:last limitPx by parentOrderID from ord where msgType=`NEW };
+    select ordType:last ordType, limitPx:last limitPx by parentOrderID from ord where msgType=`NEW, null algoOrderID };
 
 / ── F4 PWP and the achievable range ──────────────────────────────────────
 / size-weighted average of the first Q shares of a price-sorted tape
@@ -108,6 +108,19 @@
 / ── the algo wheel: fit slippage to its drivers ──────────────────────────
 / ordinary least squares, beta = (X'X)^-1 X'y ; X is a list of rows
 .b.wheelFit:{[X;y] (inv flip[X] mmu X) mmu flip[X] mmu y };
+/ the same, with a standard error per coefficient: (beta; se)
+.b.olsFit:{[X;y] xi:inv flip[X] mmu X; b:xi mmu flip[X] mmu y;
+  e:y-X mmu b; s2:(e wsum e)%count[y]-count b;
+  (b; sqrt s2*xi@'til count b) };
+
+/ one row per algo order: its slippage, which algo it went to, and two controls.
+/ VWAP is the base, so each flag reads "bps relative to VWAP".
+.b.wheelData:{[algoOrd;execs;ord]
+  a:.b.algoArrival[algoOrd;execs] lj .b.cohort ord;
+  select algoOrderID, algo, slipBps,
+         isPOV:`float$algo=`POV, isARRIVAL:`float$algo=`ARRIVAL, isDARK:`float$algo=`DARK,
+         limited:`float$cohort=`limited, sizeK:qty%10000
+    from a where not null slipBps };
 
 / one row per parent: the slippage it earned and the conditions it faced
 .b.wheelFeatures:{[parent;trade;execs;ord]

@@ -139,6 +139,9 @@ h3 .n,.logmodes h4{font-variant-caps:normal;font-feature-settings:normal;letter-
 .to-good,.to-bad{display:flex;flex-direction:column}
 .to-good h4,.to-bad h4{margin:0 0 2px;font-family:var(--display);font-size:17px}
 .titleblock{display:flex;flex-direction:column;gap:6px}
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.trilogy{font-size:13.5px;color:var(--muted);max-width:640px}
+.trilogy b{color:var(--fg)}
 .byline{font-family:var(--mono);font-size:13px;color:var(--muted);letter-spacing:.02em;user-select:all}
 .sheet{hyphens:auto;-webkit-hyphens:auto}
 .abstract,p,li,figcaption{text-align:justify;text-justify:inter-word}
@@ -237,7 +240,7 @@ mjx-container svg{max-width:100%}
 <body>
 <div class="sheet">
 <header>
-  <div class="titleblock"><h1>Anatomy of a Fill<span class="subtitle">Execution Benchmarks &amp; TCA on a Live Tick Stack in <span style="font-variant-caps:normal;font-feature-settings:normal">q/KDB+</span></span></h1><div class="byline">Editor: Rohan Shiloh Shah · <a href="https://rohanshiloh.github.io/exec-tca-stack/" style="color:inherit;text-decoration:none">rohanshiloh.github.io/exec-tca-stack</a></div></div>
+  <div class="titleblock"><div class="kicker">Trilogy Part Two: Anatomy of a Fill — The Territory</div><h1>Anatomy of a Fill<span class="subtitle">Execution Benchmarks &amp; TCA on a Live Tick Stack in <span style="font-variant-caps:normal;font-feature-settings:normal">q/KDB+</span></span></h1><div class="byline">Editor: Rohan Shiloh Shah · <a href="https://rohanshiloh.github.io/exec-tca-stack/" style="color:inherit;text-decoration:none">rohanshiloh.github.io/exec-tca-stack</a></div></div>
   <div class="meta">KDB-X Community Edition<br>~/Code/exec-tca-stack<br>equities · regular hours · signed bps<br><button class="themebtn" id="themebtn" type="button" aria-label="Switch colour theme">Theme: auto</button></div>
 </header>
 
@@ -245,7 +248,7 @@ mjx-container svg{max-width:100%}
 
 <nav class="toc" id="contents" aria-label="Contents">
   <div><h4><a href="#intro">Why Measure a Fill</a></h4><ol><li><a href="#slicing-h">An Order Trades in Pieces</a></li><li><a href="#book-h">The Book &amp; the Spread</a></li><li><a href="#cost-h">What a Fill Costs</a></li><li><a href="#intro-bench">A Benchmark Is a Yardstick</a></li><li><a href="#intro-loop">The TCA Loop</a></li><li><a href="#signed-bps">One Sign Convention</a></li><li><a href="#why-kdb">Why kdb+</a></li></ol></div>
-  <div><h4><a href="#glossary">The Vocabulary</a></h4><ol><li><a href="#glossary"><span class="tn">·</span>44 terms, one page</a></li><li><a href="#glossary"><span class="tn">·</span>Common mistakes per term</a></li></ol></div>
+  <div><h4><a href="#glossary">The Vocabulary</a></h4><ol><li><a href="#glossary"><span class="tn">·</span>45 terms, one page</a></li><li><a href="#glossary"><span class="tn">·</span>Common mistakes per term</a></li></ol></div>
   <div><h4><a href="#overview">How It Fits Together</a></h4><ol><li><a href="#arch">The Stack</a></li><li><a href="#chained-note">Why a Chained TP</a></li><li><a href="#tables">Four Event Tables</a></li><li><a href="#timeline">One Parent, Every Benchmark</a></li><li><a href="#nbbo">One Quote Is Not the NBBO</a></li><li><a href="#internalise">Internalisation</a></li></ol></div>
   <div><h4><a href="#source">The Source</a></h4><ol><li><a href="#source">How It Connects</a></li><li><a href="#src-warp">warp.yaml</a></li><li><a href="#src-sym">sym.q</a></li><li><a href="#src-feed">feed.q</a></li><li><a href="#src-engine">engine.q</a></li><li><a href="#src-bench">bench.q</a></li><li><a href="#src-tca">tca.q</a></li><li><a href="#src-replay">replay.q</a></li><li><a href="#src-rescue">rescue.q</a></li><li><a href="#src-lab">lab.q</a></li><li><a href="#src-beyond">beyond.q</a></li><li><a href="#src-dump">dump.q</a></li></ol></div>
   <div><h4><a href="#run">Run It</a></h4><ol><li><a href="#step-01"><span class="tn">01</span>Check q</a></li><li><a href="#step-02"><span class="tn">02</span>The Files</a></li><li><a href="#step-03"><span class="tn">03</span>Clean Up</a></li><li><a href="#step-04"><span class="tn">04</span>Start, One Process per Tab</a></li><li><a href="#step-05"><span class="tn">05</span>Check It's Up</a></li><li><a href="#step-06"><span class="tn">06</span>Ask the CEP</a></li><li><a href="#step-07"><span class="tn">07</span>Stop</a></li></ol></div>
@@ -283,12 +286,13 @@ mjx-container svg{max-width:100%}
 <!-- ───────────── INTRODUCTION ───────────── -->
 <section class="part annot" id="intro">
   <h2>Why Measure a Fill</h2>
-  <p class="lead"><b>Part II of two.</b> Part I, <a href="https://rohanshiloh.github.io/order-trade-lifecycle/">The Order &amp; Trade Lifecycle</a>, follows an instruction from the investment decision through routing, execution, clearing and settlement. This document starts where that one ends, at the fill, and asks the question that is left once a trade has happened: was it a good one?</p>
+  <p class="trilogy">A trilogy. <b>Part One</b>, <a href="https://rohanshiloh.github.io/order-trade-lifecycle/">The Order &amp; Trade Lifecycle</a>: the map. <b>Part Two</b>, Anatomy of a Fill: the territory. <b>Part Three</b>, Sharded Ticks: the machine.</p>
+  <p class="lead">Part One follows an instruction from the investment decision through routing, execution, clearing and settlement. This part starts where that one ends, at the fill, and asks the question that is left once a trade has happened: was it a good one? Part Three is the infrastructure that runs this at scale.</p>
   <p class="lead"><b>The whole argument in one paragraph.</b> Every benchmark here is the same question asked with a different reference price: <i>compared with what?</i> Arrival compares the fill with the mid when the order reached the desk. VWAP and TWAP compare it with an average over a window. A markout compares it with the mid a few seconds later. Computing any of them is a time-correct lookup of that reference price, and in kdb+ that is an as-of join or a window aggregate over tables you already have. The rest of the document is that idea, worked through.</p>
   <p class="companion">Companion · <a href="https://rohanshiloh.github.io/order-trade-lifecycle/">The Order &amp; Trade Lifecycle</a>: where the order comes from and where the fill goes — <a href="https://rohanshiloh.github.io/order-trade-lifecycle/#oms">the OMS</a>, <a href="https://rohanshiloh.github.io/order-trade-lifecycle/#ems">the EMS</a>, <a href="https://rohanshiloh.github.io/order-trade-lifecycle/#execution-stack">what an order really becomes</a> and <a href="https://rohanshiloh.github.io/order-trade-lifecycle/#fig-slicing">how a parent is sliced</a>.</p>
   <p class="lead">Transaction cost analysis — TCA — answers a plain question: when you bought or sold a stock, did you get a good price, and if not, where did the money go? Trading isn't free even when nobody charges a commission, because the act of buying nudges the price up against you. This section builds the idea from the ground up — <i>order</i>, <i>book</i>, <i>spread</i>, <i>fill</i>, <i>benchmark</i> — so the sharper terms in the rest of the document have something to stand on. The headline it all leads to: the spread you crossed is the small, visible part of the cost; the price that drifted while you worked the order is usually the larger, invisible one.</p>
   <h3 id="slicing-h"><a id="slicing" style="position:absolute" aria-hidden="true"></a><span class="n">1</span>An Order Trades in Pieces</h3>
-  <p class="lead">An <b>order</b> is just an instruction: buy — or sell — a certain number of shares of one stock. A large order (traders call it the <i>parent</i>)<span class="mnote"><b>Parent &amp; child.</b> The parent is the whole order; children are the slices actually sent to market. One parent → many children → many fills, all tied together by a parent id.</span> almost never trades all at once, because pushing 100,000 shares into the market in one go would shove the price against you. Instead a system cuts it into many small <i>child</i> orders and releases them over seconds, minutes or hours. Each child that actually trades comes back as a <b>fill</b> — a receipt saying "you got this many shares at this price." Every trade that prints also lands on a public record called the <b>tape</b> — the trades half of what the industry calls <i>TAQ</i> data (<b>T</b>rades <b>a</b>nd <b>Q</b>uotes)<span class="mnote"><b>TAQ.</b> Originally NYSE’s Trade-and-Quote dataset; now the generic name for combined trade + quote data. In the US the consolidated feeds (the SIP) carry the public tape.</span>; the quotes are the other half.<span class="mnote"><b>Three levels here, four in practice.</b> This stack models parent, child and fill. On a real desk an algo order sits between parent and child, so the slice the router places is one level further down. Keep an id for that middle level and you can separate what the algo cost from what the router cost.</span></p>
+  <p class="lead">An <b>order</b> is just an instruction: buy — or sell — a certain number of shares of one stock. A large order (traders call it the <i>parent</i>)<span class="mnote"><b>Parent &amp; child.</b> The parent is the whole order; children are the slices actually sent to market. One parent → many children → many fills, all tied together by a parent id.</span> almost never trades all at once, because pushing 100,000 shares into the market in one go would shove the price against you. Instead a system cuts it into many small <i>child</i> orders and releases them over seconds, minutes or hours. Each child that actually trades comes back as a <b>fill</b> — a receipt saying "you got this many shares at this price." Every trade that prints also lands on a public record called the <b>tape</b> — the trades half of what the industry calls <i>TAQ</i> data (<b>T</b>rades <b>a</b>nd <b>Q</b>uotes)<span class="mnote"><b>TAQ.</b> Originally NYSE’s Trade-and-Quote dataset; now the generic name for combined trade + quote data. In the US the consolidated feeds (the SIP) carry the public tape.</span>; the quotes are the other half.<span class="mnote"><b>Four levels.</b> Parent, algo order, child, fill. The trader hands the parent to one or more broker algos; each <b>algo order</b> is one algo’s share of it, with its own start, pace and settings. The algo slices it into children and its router places them. Keeping all four ids is what lets you separate what the algo cost from what the router cost.</span></p>
   <figure id="fig-slicing">
     <div class="fig">
 <svg viewBox="0 0 960 290" role="img" aria-label="One parent order to buy 100,000 shares is sliced into small child orders, each sent to a different trading venue over time. No single venue sees the whole order.">
@@ -493,7 +497,8 @@ mjx-container svg{max-width:100%}
   <div class="tbl"><table class="wide gloss">
     <thead><tr><th>Term</th><th>What it is</th><th>Concretely</th><th>In this stack</th><th>Common mistake</th></tr></thead>
     <tbody><tr><td>Parent order</td><td>The full instruction from the desk or PM.</td><td>“Buy 50,000 AAPL, work it this morning.”</td><td>the <code>parent</code> table, keyed by <code>parentOrderID</code></td><td>Storing it as a fact instead of the fold of its fills.</td></tr>
-      <tr><td>Child order</td><td>One slice the algo actually sends to a venue.</td><td>300 shares to ARCA at the touch.</td><td><code>ord</code> rows carrying a <code>childOrderID</code></td><td>Scoring children individually — cost belongs to the parent. In this feed the parent's NEW row on <code>ord</code> carries <code>childOrderID = parentOrderID</code>; the child ids (<code>C1</code>, <code>C2</code>, …) appear on <code>execs</code>.</td></tr>
+      <tr><td>Algo order</td><td>The share of a parent handed to one broker algo, with that algo’s settings.</td><td>30,000 of the 50,000 to a VWAP algo, the rest to an arrival algo.</td><td>the <code>algoOrd</code> table, keyed by <code>algoOrderID</code>; <code>algo</code> on every fill</td><td>Scoring an algo on the parent’s slippage when the parent was split across several algos.</td></tr>
+      <tr><td>Child order</td><td>One slice an algo order sends to a venue.</td><td>300 shares to ARCA at the touch.</td><td><code>ord</code> rows carrying a <code>childOrderID</code></td><td>Scoring children individually — cost belongs to the algo order and the parent. On <code>ord</code> the parent’s NEW row has no algo or child id, each algo order’s NEW row has an <code>algoOrderID</code>, and the child ids (<code>C1</code>, <code>C2</code>, …) appear on <code>execs</code>.</td></tr>
       <tr><td>Fill</td><td>A child order, or part of one, that traded.</td><td>180 of those 300 printed at 182.41.</td><td><code>execs where execType="F"</code></td><td>Forgetting one child can produce many fills.</td></tr>
       <tr><td>Fill rate</td><td>Shares executed ÷ shares ordered.</td><td>42,000 of 50,000 → 0.84.</td><td><code>filledQty%qty</code></td><td>Quoting slippage without it. A great price on 10% filled is not a good execution.</td></tr>
       <tr><td>Resting order book (ROB)</td><td>Every order that has been posted to a venue and is still waiting: not yet filled, not cancelled. It is what an incoming order trades against.</td><td>your 300-share bid at 182.40 sits in it until someone sells to you or you cancel.</td><td><code>bsize</code>, <code>asize</code> are its top level; a <code>liq="A"</code> fill came out of it</td><td>Taking the displayed size as all of it. Hidden and iceberg orders rest there too.</td></tr>
@@ -516,7 +521,7 @@ mjx-container svg{max-width:100%}
       <tr><td>Realised spread</td><td>The same, measured h later: what you kept.</td><td>0.3 bps at 60s.</td><td><code>.b.spreads</code> → <code>realisedBps</code></td><td>Comparing venues at different horizons.</td></tr>
       <tr><td>Price impact</td><td>Effective minus realised — the part the market took back.</td><td>1.1 − 0.3 = 0.8 bps.</td><td><code>effectiveBps-realisedBps</code></td><td>Calling adverse selection “impact”. You caused one, not the other.</td></tr>
       <tr><td>Adverse selection</td><td>Being filled right before the price moves against you.</td><td>passive fill, mid drops 2 bps in a second.</td><td>negative short-horizon <code>markout</code></td><td>Blaming the algo for what the counterparty knew.</td></tr>
-      <tr><td>Toxicity</td><td>A venue's tendency to produce adversely-selected fills.</td><td>EDGX at −0.61 bps on 1s.</td><td><code>scorecard[]</code> by <code>venue</code>, <code>horizon</code></td><td>Ranking venues by fill rate instead — the toxic ones fill fastest.</td></tr>
+      <tr><td>Toxicity</td><td>A venue's tendency to produce adversely-selected fills.</td><td>EDGX at −0.70 bps on 1s.</td><td><code>scorecard[]</code> by <code>venue</code>, <code>horizon</code></td><td>Ranking venues by fill rate instead — the toxic ones fill fastest.</td></tr>
       <tr><td>Maker / taker</td><td>Resting (adding) liquidity versus crossing to (removing) it.</td><td><code>liq="A"</code> vs <code>liq="R"</code>.</td><td>the fee model in Lab F2</td><td>Treating the rebate as income rather than the price of adverse selection.</td></tr>
       <tr><td>Queue position</td><td>How many shares rest ahead of yours at your price.</td><td>4,000 ahead of you at 182.40.</td><td><code>bsize</code> at placement, stamped on <code>ord</code></td><td>Inferring it afterwards. It is unrecoverable.</td></tr>
       <tr><td>Internalisation</td><td>The broker crosses you against its own book, not a venue.</td><td><code>liq="I"</code>, filled at the mid.</td><td><code>where liq="I"</code></td><td>Scoring it in the same pool as lit flow.</td></tr>
@@ -628,8 +633,8 @@ mjx-container svg{max-width:100%}
       <tbody>
         <tr><td><span class="tag t0">quote</span></td><td>top of book on one venue</td><td><span class="g">venue · bid · ask · bsize · asize</span></td></tr>
         <tr><td><span class="tag tsh">trade</span></td><td>a print on the consolidated tape</td><td><span class="g">venue · px · size</span></td></tr>
-        <tr><td><span class="tag t1">ord</span></td><td>a parent or child order event</td><td><span class="g">parentOrderID · childOrderID · side · ordType · qty · limitPx · tif · venue · msgType</span></td></tr>
-        <tr><td><span class="tag tsig">execs</span></td><td>an execution report (a fill)</td><td><span class="g">parentOrderID · childOrderID · side · execType · lastPx · lastQty · leaves · cumQty · venue · liq</span></td></tr>
+        <tr><td><span class="tag t1">ord</span></td><td>a parent, algo-order or child order event</td><td><span class="g">parentOrderID · algoOrderID · algo · childOrderID · side · ordType · qty · limitPx · tif · venue · msgType</span></td></tr>
+        <tr><td><span class="tag tsig">execs</span></td><td>an execution report (a fill)</td><td><span class="g">parentOrderID · algoOrderID · algo · childOrderID · side · execType · lastPx · lastQty · leaves · cumQty · venue · liq</span></td></tr>
       </tbody>
     </table>
     </div>
@@ -639,10 +644,11 @@ mjx-container svg{max-width:100%}
       <thead><tr><th>Here</th><th>FIX tag</th><th>In the lifecycle document</th></tr></thead>
       <tbody>
         <tr><td><code>parentOrderID</code></td><td>OrderID (37) of the parent</td><td><code>poid</code></td></tr>
-        <tr><td><code>childOrderID</code></td><td>ClOrdID (11)</td><td><code>oid</code></td></tr>
+        <tr><td><code>algoOrderID</code></td><td>ClOrdID (11) of the order sent to the broker</td><td>the algo child in its four-level hierarchy</td></tr>
+        <tr><td><code>childOrderID</code></td><td>the broker’s own ClOrdID (11) to the venue</td><td><code>oid</code>, the SOR placement</td></tr>
         <tr><td><code>execType</code></td><td>ExecType (150)</td><td>the order state machine</td></tr>
         <tr><td><code>lastPx</code>, <code>lastQty</code></td><td>LastPx (31), LastQty (32)</td><td>the fill</td></tr>
-        <tr><td><code>leaves</code>, <code>cumQty</code></td><td>LeavesQty (151), CumQty (14)</td><td>the running totals</td></tr>
+        <tr><td><code>leaves</code>, <code>cumQty</code></td><td>LeavesQty (151), CumQty (14)</td><td>the running totals, per algo order</td></tr>
       </tbody>
     </table></div>
 </div>
@@ -809,10 +815,13 @@ active_window_index: 0</pre></div>
       </div>
     </details>
     <details class="srcfile" id="src-sym">
-      <summary><span class="fn">sym.q</span><span class="role">schema — the TP loads this</span><span class="lc">35 lines</span></summary>
+      <summary><span class="fn">sym.q</span><span class="role">schema — the TP loads this</span><span class="lc">40 lines</span></summary>
       <div class="body">
         <div class="desc">One table per message class — <code>quote</code>, <code>trade</code>, <code>ord</code>, <code>execs</code> — each opening with <code>time·sym</code> so <code>tick.q</code> accepts it and carrying <code>`g#sym</code> for fast by-sym selection. <code>time</code> is a timespan the TP stamps on receipt. Also the reference data every process agrees on: the universe, venue list, and session window.</div>
         <div class="code"><pre>/ exec-tca-stack : schema
+/ One event table per message class. Orders are a hierarchy: a parent (the PM's
+/ order) is worked as one or more algo orders (one per broker algo), each sliced
+/ into child orders, each of which may fill several times.
 / One event table per message class. tick.q loads this as its schema file,
 / so every table must open with `time`sym (tick.q enforces 2#key = `time`sym)
 / and carry `g#sym for fast by-sym selection in the RDB and CEP.
@@ -829,12 +838,14 @@ trade:([]                                   / the consolidated tape (prints)
   px:`float$(); size:`long$() )
 
 ord:([]                                      / order events: new / replace / cancel
-  time:`timespan$(); sym:`g#`symbol$(); parentOrderID:`symbol$(); childOrderID:`symbol$();
+  time:`timespan$(); sym:`g#`symbol$(); parentOrderID:`symbol$();
+  algoOrderID:`symbol$(); algo:`symbol$(); childOrderID:`symbol$();
   side:`char$(); ordType:`char$(); qty:`long$(); limitPx:`float$();
   tif:`char$(); venue:`symbol$(); msgType:`symbol$() )
 
 execs:([]                                     / execution reports (fills, busts, acks)
-  time:`timespan$(); sym:`g#`symbol$(); parentOrderID:`symbol$(); childOrderID:`symbol$();
+  time:`timespan$(); sym:`g#`symbol$(); parentOrderID:`symbol$();
+  algoOrderID:`symbol$(); algo:`symbol$(); childOrderID:`symbol$();
   side:`char$(); execType:`char$(); lastPx:`float$(); lastQty:`long$();
   leaves:`long$(); cumQty:`long$(); venue:`symbol$(); liq:`char$() )
 
@@ -850,7 +861,7 @@ session:09:30:00.000 16:00:00.000                    / regular-hours window</pre
       </div>
     </details>
     <details class="srcfile" id="src-feed">
-      <summary><span class="fn">feed.q</span><span class="role">synthetic MD + order flow</span><span class="lc">101 lines</span></summary>
+      <summary><span class="fn">feed.q</span><span class="role">synthetic MD + order flow</span><span class="lc">131 lines</span></summary>
       <div class="body">
         <div class="desc">The market simulator. On a 100ms timer it random-walks each mid, publishes per-venue top-of-book and tape prints, spawns parent orders and slices them into child fills. Venue-dependent adverse selection (split fast/slow) is what makes the markout curves and the scorecard differ by venue. Publishes to the TP without a time column, per the kdb-tick contract.</div>
         <div class="code"><pre>/ exec-tca-stack : synthetic feed  (market data tape + order/execution flow)
@@ -866,17 +877,28 @@ pub:{h(`.u.upd;x;y)};                        / feeds call .u.upd on the TP; y = 
 / all top-level (no namespace): KDB-X does not fall back to root for reads
 n:count uni;
 mid:value refPx;                             / live mid per sym, aligned to uni
-fastD:n#0f; slowD:n#0f;                       / adverse-selection drift, two speeds
+prevMid:mid;                                 / the mid one tick ago: resting orders fill on the move
+fastD:n#0f; slowD:n#0f;                       / venue after-effects, two speeds (bps pools)
+impD:n#0f;                                    / our own market impact, decaying (bps)
 vol:0.00001+0.000004*til n;                   / per-step volatility per sym (~0.1-0.4 bps)
-/ Post-fill kick per venue, in bps AGAINST the trader (negative = the mid moves
-/ with the trade). Split in two speeds: fast = gone within a second (latency),
-/ slow = arrives over about a minute (information). The values are centred so
-/ the average over the venue pool is ~0: a parent's own later fills then do not
-/ swamp the venue signal, and the scorecard can tell the venues apart.
-toxF:venues!(-0.35 -0.45 -0.35 0.77 -0.6 -0.4);  / EDGX: damage inside the first second
-toxS:venues!(-0.25 -0.25 0.45 0.2 -0.5 -0.3);    / BATS: damage that keeps arriving
-passiveKick:0.4;                               / extra fast kick when a resting order is hit
-pool:`ARCA`NSDQ`BATS`EDGX`EDGX`BATS`MLIT`INTL; / SOR venue mix (lit-heavy, some dark/house)
+/ After each fill a venue moves the mid AGAINST the trader by these amounts (bps):
+/ fast = within a second (someone was quicker), slow = over about a minute
+/ (someone knew more). Centred over the lit venues, so that an algo's own later
+/ fills are not helped or hurt by its own routing; the dark venues leak nothing.
+toxF:venues!(-0.4 -0.4 -0.4 0.8 0.0 0.0);    / EDGX: damage inside the first second
+toxS:venues!(-0.5 -0.5 0.45 0.05 0.0 0.0);   / BATS: damage that keeps arriving
+alpha:1.5;                                    / the PM's edge: bps the price drifts his way, on average
+impK:0.02; impDecay:0.85;                     / impact per 100 shares, and how fast it fades per tick
+pool:`ARCA`NSDQ`BATS`EDGX`EDGX`BATS`MLIT`INTL; / default router mix (lit-heavy, some dark/house)
+litPool:`ARCA`NSDQ`BATS`EDGX`EDGX`BATS;        / sweep the lit book only
+darkPool:`MLIT`MLIT`INTL;                      / midpoint and house only
+/ the four broker algos the wheel chooses between, and how each one behaves
+/   pTrade   share of ticks it sends a child     sMin,sRange  child size, in lots
+/   pPassive share of lit children that rest      route        which venue pool
+algoParams:([algo:`VWAP`POV`ARRIVAL`DARK]
+  pTrade:0.5 0.8 1.0 0.25; sMin:1 1 3 2; sRange:3 4 6 5;
+  pPassive:0.45 0.3 0.0 0.0; route:`pool`pool`lit`dark);
+algoNames:exec algo from 0!algoParams;
 lot:100; seq:0; nTick:0;                       / nTick counts timer ticks (100ms each)
 nid:{seq+:1; `$x,string seq};                 / monotonic id with a prefix
 rnd:{-1f+2f*x?1f};                            / x draws, uniform on (-1,1)
@@ -888,10 +910,12 @@ rnd:{-1f+2f*x?1f};                            / x draws, uniform on (-1,1)
 / NOTE the `::` — inside a lambda a plain `x:` binds a LOCAL, so the clamp was
 / silently doing nothing. (`x*:` and `x[i]+:` DO amend the global; `x:` does not.)
 / Decay and clamp are folded into one global assignment each.
-mdStep:{ fastD::(-12f)|12f&amp;0.55*fastD;        / fast decays sub-second, then clamp
+mdStep:{ prevMid::mid;
+  fastD::(-12f)|12f&amp;0.55*fastD;               / fast decays sub-second, then clamp
   slowD::(-12f)|12f&amp;0.99*slowD;               / slow decays over ~7s, then clamp
-  drift:1e-4*(0.45*fastD)+(0.01*slowD);                   / per-step share of the move
-  pull:0.0005*(value refPx)-mid;                          / gentle pull to the anchor px
+  rev:impD*impDecay-1; impD+:rev;             / impact fades: the price gives some back
+  drift:1e-4*(0.45*fastD)+(0.01*slowD)+rev;   / per-step share of the move
+  pull:0.0005*(value refPx)-mid;              / gentle pull to the anchor px
   mid+:pull+(mid*vol*rnd n)+(mid*drift); };
 
 pushQuotes:{ nv:count lit; r:n*nv;
@@ -903,52 +927,69 @@ pushTape:{ k:10+rand 20; ix:k?n;              / 10–29 background prints near t
   pub[`trade;(uni ix; pool k?count pool; (mid ix)+0.005*rnd k; lot*1+k?10)]; };
 
 / ── order / execution flow ──────────────────────────────────────────────
-/ limitPx is null for a market parent; born is the tick it arrived on.
-active:([parentOrderID:`symbol$()] sym:`symbol$(); side:`char$(); qty:`long$(); filledQty:`long$();
-  limitPx:`float$(); born:`long$());
+/ parent (the PM's order) -&gt; algo orders (one per broker algo) -&gt; children -&gt; fills.
+/ The feed works ALGO orders; a parent is just the sum of its algo orders.
+/ limitPx is null for a market order; born is the tick it arrived on.
+active:([algoOrderID:`symbol$()] parentOrderID:`symbol$(); sym:`symbol$(); side:`char$();
+  algo:`symbol$(); qty:`long$(); filledQty:`long$(); limitPx:`float$(); born:`long$());
 
 spawnParent:{ if[0.08&lt;first 1?1f; :()];       / ~8% of ticks start a parent
-  s:first 1?n; sd:$[0.5&gt;first 1?1f;"B";"S"]; q:lot*10*1+first 1?40; p:nid"P";
+  s:first 1?n; sd:$[0.5&gt;first 1?1f;"B";"S"]; sg:$[sd="B";1f;-1f];
+  q:lot*10*1+first 1?40; p:nid"P";
   / 30% of parents carry a limit 1-3 bps through the arrival mid; the rest are market
-  isLim:0.3&gt;first 1?1f;
-  lim:$[isLim; (mid s)*1+1e-4*$[sd="B";1f;-1f]*1+first 1?2f; 0n];
-  `active upsert (p; uni s; sd; q; 0; lim; nTick);
-  pub[`ord;(enlist uni s; enlist p; enlist p; enlist sd; enlist $[isLim;"L";"M"];
-            enlist q; enlist lim; enlist "0"; enlist `SOR; enlist `NEW)]; };
+  isLim:0.3&gt;first 1?1f; ot:$[isLim;"L";"M"];
+  lim:$[isLim; (mid s)*1+1e-4*sg*1+first 1?2f; 0n];
+  / the PM trades for a reason: the price tends to drift his way over the next half minute
+  @[`slowD; s; +; sg*alpha*first 1?2f];
+  / the parent, as the OMS records it: no algo yet, no child
+  pub[`ord;(enlist uni s; enlist p; enlist `; enlist `; enlist `; enlist sd; enlist ot;
+            enlist q; enlist lim; enlist "0"; enlist `; enlist `NEW)];
+  / the trader hands it to one or two broker algos, picked at random. Random
+  / assignment is the wheel: it is what makes the algos comparable afterwards.
+  q1:lot*floor 0.6*q%lot;                      / a 60/40 split, in whole lots
+  qs:$[0.6&gt;first 1?1f; enlist q; (q1; q-q1)];
+  k:count qs; ids:nid'[k#"A"]; al:algoNames k?count algoNames;
+  `active upsert ([] algoOrderID:ids; parentOrderID:k#p; sym:k#uni s; side:k#sd; algo:al;
+    qty:qs; filledQty:k#0; limitPx:k#lim; born:k#nTick);
+  pub[`ord;(k#uni s; k#p; ids; al; k#`; k#sd; k#ot; qs; k#lim; k#"0"; k#`SOR; k#`NEW)]; };
 
 workOrders:{ if[0=count active; :()];
   a:0!active;
-  / a limited parent only trades while the touch is inside its limit
+  / a limited order only trades while the touch is inside its limit
   m0:mid uni?a`sym; isBuy:(a`side)="B";
   a:a where (null a`limitPx) | ?[isBuy; (m0+0.01)&lt;=a`limitPx; (m0-0.01)&gt;=a`limitPx];
+  a:a lj algoParams;                            / each algo order picks up its algo's behaviour
+  a:a where (count[a]?1f)&lt;a`pTrade;             / and only trades on its share of ticks
   if[0=count a; :()];
-  c:count a; rem:a[`qty]-a`filledQty;
-  slice:rem &amp; lot*1+c?5;                       / child slice, capped at remaining
-  si:uni?a`sym; buy:a[`side]="B"; vn:pool c?count pool;
-  / 40% of lit children REST at the near touch instead of crossing to the far one.
-  passive:(vn in lit) &amp; 0.40&gt;c?1f;
-  takePx:(mid si)+?[buy; 0.01; -0.01];          / take: pay the far touch
-  makePx:(mid si)-?[buy; 0.01; -0.01];          / make: earn the near touch
-  px:?[vn in lit; ?[passive; makePx; takePx]; mid si];      / dark / house fill at the mid
+  c:count a; si:uni?a`sym; sg:?[(a`side)="B"; 1f; -1f]; r:a`route;
+  vn:?[r=`lit; litPool c?count litPool; ?[r=`dark; darkPool c?count darkPool; pool c?count pool]];
+  passive:(vn in lit) &amp; (c?1f)&lt;a`pPassive;
+  / A resting order only fills when someone comes to it: a resting buy is hit as the
+  / price falls, never as it rises. That selection IS adverse selection; the rebate
+  / is what a venue pays you to accept it.
+  k:where not passive &amp; 0&lt;sg*(mid si)-prevMid si;
+  if[0=count k; :()];
+  a:a k; vn:vn k; passive:passive k; si:si k; sg:sg k; c:count k;
+  slice:(a[`qty]-a`filledQty) &amp; lot*a[`sMin]+floor a[`sRange]*c?1f;   / capped at remaining
+  takePx:(mid si)+0.01*sg;                      / take: pay the far touch
+  makePx:(prevMid si)-0.01*sg;                  / make: the near touch you were resting on
+  px:?[passive; makePx; ?[vn in lit; takePx; mid si]];   / dark / house fill at the mid
   liq:?[vn in lit; ?[passive; "A"; "R"]; ?[vn=house; "I"; "M"]];
   / R removed lit, A added lit, I internalised, M dark midpoint.
-  / `push` models NET post-fill adverse drift (what markouts measure); it does not
-  / separate your own impact from being picked off on a passive fill.
-  / A RESTING fill is adversely selected harder: you were filled because the other
-  / side wanted out just before the move. That is what the rebate is paying for.
-  push:?[buy; -1f; 1f];                         / a buy on a toxic venue drifts the mid down
-  / functional amend: accumulates when two parents hit the same sym in one tick
-  @[`fastD; si; +; push*(toxF vn)+passiveKick*passive];
-  @[`slowD; si; +; push*toxS vn];
-  cum:a[`filledQty]+slice; lv:a[`qty]-cum;
-  pub[`execs;(a`sym; a`parentOrderID; nid'[c#"C"]; a`side; c#"F";
+  / functional amend: accumulates when two orders hit the same sym in one tick
+  @[`fastD; si; +; neg sg*toxF vn];             / the venue's after-effect, against the trader
+  @[`slowD; si; +; neg sg*toxS vn];
+  imp:sg*impK*slice%lot;                        / our own impact: moves the price now, fades later
+  @[`impD; si; +; imp]; @[`mid; si; *; 1+1e-4*imp];
+  cum:a[`filledQty]+slice; lv:a[`qty]-cum;      / CumQty and LeavesQty are per algo order
+  pub[`execs;(a`sym; a`parentOrderID; a`algoOrderID; a`algo; nid'[c#"C"]; a`side; c#"F";
              px; slice; lv; cum; vn; liq)];
   pub[`trade;(a`sym; vn; px; slice)];           / our own fills print on the tape too
-  `active upsert update filledQty:cum from a;       / write progress back by key
-  if[count fin:a[`parentOrderID] where lv&lt;=0; delete from `active where parentOrderID in fin]; };
+  `active upsert (cols active)#update filledQty:cum from a;   / write progress back by key
+  if[count fin:a[`algoOrderID] where lv&lt;=0; delete from `active where algoOrderID in fin]; };
 
-/ a parent that has not finished within 60s is abandoned: its unfilled remainder
-/ is what the opportunity-cost benchmark measures.
+/ an algo order that has not finished within 60s is abandoned: its unfilled
+/ remainder is what the opportunity-cost benchmark measures.
 expire:{ delete from `active where born&lt;nTick-600; };
 
 .z.ts:{ nTick+:1; mdStep[]; pushQuotes[]; pushTape[]; spawnParent[]; workOrders[]; expire[] };
@@ -957,7 +998,7 @@ system"t 100";                                 / drive the feed every 100ms
       </div>
     </details>
     <details class="srcfile" id="src-engine">
-      <summary><span class="fn">engine.q</span><span class="role">state + handlers + benchmark wrappers</span><span class="lc">62 lines</span></summary>
+      <summary><span class="fn">engine.q</span><span class="role">state + handlers + benchmark wrappers</span><span class="lc">83 lines</span></summary>
       <div class="body">
         <div class="desc">The core. Holds the live tables, keeps a <code>topMid</code> per sym, stamps arrival price on every parent at its <code>NEW</code>, folds fills into parent state, and exposes the no-argument benchmark wrappers. Loaded by both the live CEP and the replay path, so one code path serves real-time and batch.</div>
         <div class="code"><pre>/ exec-tca-stack : the TCA engine
@@ -972,20 +1013,33 @@ system"t 100";                                 / drive the feed every 100ms
 topMid:(`symbol$())!`float$();                         / consolidated mid per sym
 parent:([parentOrderID:`symbol$()] sym:`symbol$(); side:`char$(); qty:`long$();
   arrivalTime:`timespan$(); arrivalMid:`float$(); filledQty:`long$(); notional:`float$());
+/ one level down: each algo order, with its own arrival mid (the mid when the algo got it)
+algoOrd:([algoOrderID:`symbol$()] parentOrderID:`symbol$(); sym:`symbol$(); side:`char$();
+  algo:`symbol$(); qty:`long$(); arrivalTime:`timespan$(); arrivalMid:`float$();
+  filledQty:`long$(); notional:`float$());
 
 / handlers at top-level (no namespace): KDB-X does not fall back to root for reads
 / SIMPLIFICATION: takes the LAST venue in the batch, not a true consolidated NBBO
 / (which would be max bid / min ask across the lit venues).
 updTop:{[d] a:0!select mid:last 0.5*bid+ask by sym from d; `topMid upsert (a`sym)!a`mid };
+/ a NEW with no algoOrderID is the parent; a NEW with one is an algo order
 onOrd:{[d] d:select from d where msgType=`NEW;
-  if[count d; `parent upsert 0!select parentOrderID, sym, side, qty,
-     arrivalTime:time, arrivalMid:topMid sym, filledQty:0, notional:0f from d] };
+  p:select from d where null algoOrderID;
+  if[count p; `parent upsert 0!select parentOrderID, sym, side, qty,
+     arrivalTime:time, arrivalMid:topMid sym, filledQty:0, notional:0f from p];
+  a:select from d where not null algoOrderID;
+  if[count a; `algoOrd upsert 0!select algoOrderID, parentOrderID, sym, side, algo, qty,
+     arrivalTime:time, arrivalMid:topMid sym, filledQty:0, notional:0f from a] };
 onExec:{[d] d:select from d where execType="F";
   if[0=count d; :()];
   g:select fillQty:sum lastQty, fillNotional:sum lastPx*lastQty by parentOrderID from d;
   p:(0!select from parent where parentOrderID in (0!g)`parentOrderID) lj g;
   `parent upsert delete fillQty,fillNotional from
-     update filledQty:filledQty+fillQty, notional:notional+fillNotional from p };
+     update filledQty:filledQty+fillQty, notional:notional+fillNotional from p;
+  g:select fillQty:sum lastQty, fillNotional:sum lastPx*lastQty by algoOrderID from d;
+  a:(0!select from algoOrd where algoOrderID in (0!g)`algoOrderID) lj g;
+  `algoOrd upsert delete fillQty,fillNotional from
+     update filledQty:filledQty+fillQty, notional:notional+fillNotional from a };
 
 / ── upd: insert the batch, then advance derived state ────────────────────
 upd:{[t;x] t insert x;
@@ -1005,6 +1059,8 @@ ofi:{ .b.ofi[quote;0D00:00:05] };
 pov:{ .b.participation[parent;trade;execs] };
 vcurve:{ .b.volcurve trade };
 closes:{ .b.closePx trade };
+algoArrival:{ .b.algoArrival[algoOrd;execs] };         / slippage per algo order
+algos:{ .b.algoScorecard algoArrival[] };               / and per algo: what the wheel reads
 
 / beyond-vanilla wrappers (beyond.q)
 robust:{ .b.robustArrival[parent;quote;0D00:00:01] };
@@ -1017,15 +1073,21 @@ pwp:{ .b.pwpTable[parent;trade;execs;0.2] };
 bands:{ .b.pitBands[execs;quote] };
 context:{ .b.contextNorm[parent;execs;quote] };
 peers:{ .b.pctScore[parent;execs] };
-/ the wheel: bps of arrival slippage attributable to each driver
-wheel:{ f:.b.wheelFeatures[parent;trade;execs;ord];
+/ the wheel: arrival slippage per algo order, fitted on which algo it went to.
+/ Each coefficient is bps relative to VWAP, after allowing for limit and size.
+wheel:{ f:.b.wheelData[algoOrd;execs;ord];
+  X:flip (count[f]#1f; f`isPOV; f`isARRIVAL; f`isDARK; f`limited; f`sizeK);
+  r:.b.olsFit[X; f`slipBps];
+  ([] driver:`VWAP`POV`ARRIVAL`DARK`limited`sizeK; bpsPerUnit:r 0; stdErr:r 1; tStat:r[0]%r 1) };
+/ why: the same slippage per parent, fitted on how each one was traded
+drivers:{ f:.b.wheelFeatures[parent;trade;execs;ord];
   X:flip (count[f]#1f; f`limited; f`pov; f`sizeK; f`passiveShare; f`toxicShare; f`darkShare);
   ([] driver:`intercept`limited`pov`sizeK`passiveShare`toxicShare`darkShare;
       bpsPerUnit:.b.wheelFit[X; f`slipBps]) };</pre></div>
       </div>
     </details>
     <details class="srcfile" id="src-bench">
-      <summary><span class="fn">bench.q</span><span class="role">the TCA library (.b.*)</span><span class="lc">104 lines</span></summary>
+      <summary><span class="fn">bench.q</span><span class="role">the TCA library (.b.*)</span><span class="lc">118 lines</span></summary>
       <div class="body">
         <div class="desc">Pure functions, each taking the tables it needs explicitly: arrival/IS and shortfall, interval VWAP and TWAP, markouts, effective/realised spread, the venue scorecard, OFI, realised participation, the square-root pre-trade estimate, and the volume curve. Nothing here touches global state, so the same function runs inside the CEP and over a replayed HDB day.</div>
         <div class="code"><pre>/ exec-tca-stack : benchmark &amp; TCA library  (.b namespace, pure functions)
@@ -1059,6 +1121,20 @@ shortfall:{[parent;execs;decisionMid;endPx]
          execBps :?[fillRate&gt;0; fillRate*1e4*.b.buyorsell[side]*(arrivalMid-averageFillPrice)%decisionMid; 0f],
          oppBps  :(1-fillRate)*1e4*.b.buyorsell[side]*(arrivalMid-endPx)%decisionMid
     from a };
+
+/ the same, one level down: each algo order against the mid when the algo got it.
+/ This is the number an algo wheel scores.
+algoArrival:{[algoOrd;execs]
+  f:select averageFillPrice:(sum lastPx*lastQty)%sum lastQty, filled:sum lastQty
+      by algoOrderID from execs where execType="F";
+  a:0!(algoOrd lj f);
+  update slipBps:1e4*.b.buyorsell[side]*(arrivalMid-averageFillPrice)%arrivalMid,
+         fillRate:(0^filled)%qty from a };
+
+/ per algo: cost and completeness side by side, never one without the other
+algoScorecard:{[aa] 0!select algoOrders:count i, shares:sum 0^filled,
+    avgSlipBps:avg slipBps, medSlipBps:med slipBps where not null slipBps, sharesWtdBps:(0^filled) wavg slipBps,
+    fillRate:avg fillRate by algo from aa };
 
 / ── VWAP (interval) ──────────────────────────────────────────────────────
 / the tape over each parent's own active window [first fill; last fill].
@@ -1135,7 +1211,7 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
       </div>
     </details>
     <details class="srcfile" id="src-beyond">
-      <summary><span class="fn">beyond.q</span><span class="role">beyond-vanilla benchmarks — the F labs</span><span class="lc">121 lines</span></summary>
+      <summary><span class="fn">beyond.q</span><span class="role">beyond-vanilla benchmarks — the F labs</span><span class="lc">134 lines</span></summary>
       <div class="body">
         <div class="desc">Robust arrival, fee-aware cost, the marketable/limited split, the PWP range, point-in-time bands, execution versus market, and percentile scoring. Defined from the root with explicit <code>.b.</code> names, because KDB-X does not fall back to the root for reads made inside a namespace.</div>
         <div class="code"><pre>/ exec-tca-stack : beyond-vanilla TCA  (the F labs; extends the .b namespace)
@@ -1178,7 +1254,7 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
 / one row per parent: marketable or limited, with its limit
 .b.cohort:{[ord]
   update cohort:?[ordType="M";`marketable;`limited] from
-    select ordType:last ordType, limitPx:last limitPx by parentOrderID from ord where msgType=`NEW };
+    select ordType:last ordType, limitPx:last limitPx by parentOrderID from ord where msgType=`NEW, null algoOrderID };
 
 / ── F4 PWP and the achievable range ──────────────────────────────────────
 / size-weighted average of the first Q shares of a price-sorted tape
@@ -1248,6 +1324,19 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
 / ── the algo wheel: fit slippage to its drivers ──────────────────────────
 / ordinary least squares, beta = (X'X)^-1 X'y ; X is a list of rows
 .b.wheelFit:{[X;y] (inv flip[X] mmu X) mmu flip[X] mmu y };
+/ the same, with a standard error per coefficient: (beta; se)
+.b.olsFit:{[X;y] xi:inv flip[X] mmu X; b:xi mmu flip[X] mmu y;
+  e:y-X mmu b; s2:(e wsum e)%count[y]-count b;
+  (b; sqrt s2*xi@'til count b) };
+
+/ one row per algo order: its slippage, which algo it went to, and two controls.
+/ VWAP is the base, so each flag reads "bps relative to VWAP".
+.b.wheelData:{[algoOrd;execs;ord]
+  a:.b.algoArrival[algoOrd;execs] lj .b.cohort ord;
+  select algoOrderID, algo, slipBps,
+         isPOV:`float$algo=`POV, isARRIVAL:`float$algo=`ARRIVAL, isDARK:`float$algo=`DARK,
+         limited:`float$cohort=`limited, sizeK:qty%10000
+    from a where not null slipBps };
 
 / one row per parent: the slippage it earned and the conditions it faced
 .b.wheelFeatures:{[parent;trade;execs;ord]
@@ -1277,7 +1366,7 @@ TP:$[count .z.x; first .z.x; ":5013"];
 / end of day, relayed by the chained tickerplant: start the new day empty
 .u.end:{[d] {@[`.;x;0#]} each `quote`trade`ord`execs;
   @[;`sym;`g#] each `quote`trade`ord`execs;
-  delete from `parent;
+  delete from `parent; delete from `algoOrd;
   -1"end of day ",string[d],": intraday state cleared"; };
 
 -1"tca → subscribed @ ",TP,"   try:  arrival[]  markouts[]  scorecard[]  ofi[]";</pre></div>
@@ -1353,7 +1442,7 @@ bps:{ 0.01*floor 0.5+100*x };                 / round to 2dp for the eye
       </div>
     </details>
     <details class="srcfile" id="src-dump">
-      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">117 lines</span></summary>
+      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">122 lines</span></summary>
       <div class="body">
         <div class="desc"><code>\l dump.q</code> then <code>tcaDump[]</code> in the TCA tab runs every benchmark and writes the output to <code>tcaData.txt</code>. Each query is trapped, so one failure prints its error and the rest still run. The outputs in this document came from it.</div>
         <div class="code"><pre>/ exec-tca-stack : write TCA diagnostics to tcaData.txt
@@ -1399,10 +1488,15 @@ tcaQueries:(
   "5#peers[]";
   "select n:count i, avgCost:avg cost, medCost:med cost by side, szBucket from peers[]";
   "5#.b.wheelFeatures[parent;trade;execs;ord]";
+  "select algoOrders:count i, parents:count distinct parentOrderID by algo from algoOrd";
+  "5#algoArrival[]";
+  "algos[]";
   "wheel[]";
-  "5#select tot:distinct cumQty+leaves by parentOrderID from execs";
-  "count select from execs where 1&lt;({count distinct x};cumQty+leaves) fby parentOrderID";
-  "5#(select pq:first qty by parentOrderID from parent) lj select cum:last cumQty by parentOrderID from execs where execType=\"F\"";
+  "drivers[]";
+  "select n:count i, avgPassive:avg liq=\"A\", avgDark:avg liq in \"MI\" by algo from execs";
+  "5#select tot:distinct cumQty+leaves by algoOrderID from execs";
+  "count select from execs where 1&lt;({count distinct x};cumQty+leaves) fby algoOrderID";
+  "5#(select aq:first qty by algoOrderID from algoOrd) lj select cum:last cumQty by algoOrderID from execs where execType=\"F\"";
   "(count execs; count select from execs where i=(first;i) fby childOrderID)";
   "select parentOrderID,sym,side,fillRate,slipBps from 5#arrival[]";
   "5#.b.shortfall[parent;execs; exec arrivalMid from 0!parent; (exec sym!closePx from closes[]) exec sym from 0!parent]";
@@ -1722,32 +1816,39 @@ q)\\          <span class="c">/ or just exit</span></pre></div>
     <div class="notes">
       <h3><span class="n">A1</span>Exec Fold → Parent State</h3>
       <div class="where">Run in <span class="tag tsh">TCA</span></div>
-      <p>A parent order is never stored as a fact — it is the <i>fold</i> of its execution reports. The engine keeps a keyed <code>parent</code> table and advances it on every batch of fills: cumulative quantity, notional, and the arrival mid stamped once at the <code>NEW</code>.</p>
-      <p class="notice">Because <code>parentOrderID</code> is on every fill, rollup is a <code>by parentOrderID</code> group-by. No join, no reconciliation against the OMS — replay the <code>execs</code> stream and the parent reappears.</p>
+      <p>A parent order is never stored as a fact — it is the <i>fold</i> of its execution reports. The engine keeps two keyed tables, <code>parent</code> and <code>algoOrd</code>, and advances both on every batch of fills: cumulative quantity, notional, and the arrival mid stamped once at each <code>NEW</code>. The parent’s arrival is the mid when the order reached the desk; an algo order’s is the mid when that algo was handed its share.</p>
+      <p class="notice">Because <code>parentOrderID</code> and <code>algoOrderID</code> are on every fill, each rollup is a group-by. No join, no reconciliation against the OMS — replay the <code>execs</code> stream and the parent reappears.</p>
     </div>
     <div class="cmds">
-      <div class="code"><pre><span class="c">/ engine.q — arrival price stamped once, at the parent NEW</span>
+      <div class="code"><pre><span class="c">/ engine.q — arrival stamped once per level, at each NEW</span>
 onOrd:{[d] d:select from d where msgType=`NEW;
-  if[count d; `parent upsert 0!select parentOrderID, sym, side, qty,
-     arrivalTime:time, arrivalMid:topMid sym, filledQty:0, notional:0f from d] };
+  p:select from d where null algoOrderID;
+  if[count p; `parent upsert 0!select parentOrderID, sym, side, qty,
+     arrivalTime:time, arrivalMid:topMid sym, filledQty:0, notional:0f from p];
+  a:select from d where not null algoOrderID;
+  if[count a; `algoOrd upsert 0!select algoOrderID, parentOrderID, sym, side, algo, qty,
+     arrivalTime:time, arrivalMid:topMid sym, filledQty:0, notional:0f from a] };
 
-<span class="c">/ …and the running fold over fills</span>
+<span class="c">/ …and the running fold over fills, at both levels</span>
 onExec:{[d] d:select from d where execType="F";
   if[0=count d; :()];
-  g:select fillQty:sum lastQty, fillNotional:sum lastPx*lastQty
-      by parentOrderID from d;
+  g:select fillQty:sum lastQty, fillNotional:sum lastPx*lastQty by parentOrderID from d;
   p:(0!select from parent where parentOrderID in (0!g)`parentOrderID) lj g;
   `parent upsert delete fillQty,fillNotional from
-     update filledQty:filledQty+fillQty, notional:notional+fillNotional from p };</pre></div>
+     update filledQty:filledQty+fillQty, notional:notional+fillNotional from p;
+  g:select fillQty:sum lastQty, fillNotional:sum lastPx*lastQty by algoOrderID from d;
+  a:(0!select from algoOrd where algoOrderID in (0!g)`algoOrderID) lj g;
+  `algoOrd upsert delete fillQty,fillNotional from
+     update filledQty:filledQty+fillQty, notional:notional+fillNotional from a };</pre></div>
       <div class="code"><pre><span class="c">/ TCA tab — the live parent book</span>
 q)5#0!parent
-parentOrderID sym   side qty   arrivalTime          arrivalMid filledQty notional
----------------------------------------------------------------------------------
-P1            AAPL  S    5000  0D04:54:26.598604000 182.4029   5000      912009.9
-P17           GOOGL B    11000 0D04:54:30.199799000 166.2066   11000     1828002
-P36           JPM   B    10000 0D04:54:31.998465000 201.7672   10000     2017694
-P53           AMZN  B    40000 0D04:54:32.798703000 178.9121   26200     4686999     <span class="c">/ a limit order, two thirds done</span>
-P63           JPM   B    12000 0D04:54:33.099241000 201.7401   12000     2421282
+parentOrderID sym  side qty   arrivalTime          arrivalMid filledQty notional
+--------------------------------------------------------------------------------
+P1            AAPL S    5000  0D05:18:51.369542000 182.4029   5000      911947.3
+P11           AAPL B    13000 0D05:18:52.068143000 182.3972   13000     2371067
+P33           JPM  B    10000 0D05:18:53.768316000 201.808    10000     2018109
+P39           NVDA S    2000  0D05:18:53.968793000 121.682    2000      243359.5
+P73           JPM  S    31000 0D05:18:55.468743000 201.8017   31000     6254224
 q)select pctFilled:filledQty%qty, vwapFill:notional%filledQty by parentOrderID from parent</pre></div>
     </div>
   </div>
@@ -1762,16 +1863,15 @@ q)select pctFilled:filledQty%qty, vwapFill:notional%filledQty by parentOrderID f
       <p class="warn">Real exec feeds resend reports. Dedupe on the broker's <code>ExecID</code> (FIX tag 17) before you fold, or every retransmit double-counts <code>cumQty</code>. The sim doesn't duplicate; your gateway will.</p>
     </div>
     <div class="cmds">
-      <div class="code"><pre><span class="c">/ 1 — per-fill FIX invariant: cumQty+leaves is constant per order</span>
-<span class="c">/     (this synthetic feed tracks both at the PARENT level; real FIX carries</span>
-<span class="c">/      CumQty/LeavesQty per childOrderID, so group by childOrderID there)</span>
-q)select tot:distinct cumQty+leaves by parentOrderID from execs
-q)select from execs where 1&lt;({count distinct x};cumQty+leaves) fby parentOrderID  <span class="c">/ empty</span>
+      <div class="code"><pre><span class="c">/ 1 — per-fill FIX invariant: cumQty+leaves is constant per order.</span>
+<span class="c">/     The order a broker reports against is the one you sent it: the algo order.</span>
+q)select tot:distinct cumQty+leaves by algoOrderID from execs
+q)select from execs where 1&lt;({count distinct x};cumQty+leaves) fby algoOrderID  <span class="c">/ empty</span>
 
-<span class="c">/ 2 — parent cumQty equals the sum over its children</span>
-q)(select pq:first qty by parentOrderID from parent) lj
-    select cum:last cumQty by parentOrderID from execs where execType="F"</pre></div>
-      <div class="code"><pre><span class="c">/ 3 — dedupe pattern (this feed sends one report per child)</span>
+<span class="c">/ 2 — each algo order's cumQty equals what the engine folded</span>
+q)(select aq:first qty by algoOrderID from algoOrd) lj
+    select cum:last cumQty by algoOrderID from execs where execType="F"
+<span class="c">/ 3 — dedupe pattern (this feed sends one report per child)</span>
 q)execs:select from execs where i=(first;i) fby childOrderID   <span class="c">/ real FIX: fby ExecID</span>
 
 <span class="c">/ replay idempotence: rebuild parent from the log alone</span>
@@ -1797,15 +1897,14 @@ arrival:{[parent;execs]
   p:0!(parent lj f);
   update slipBps:1e4*.b.buyorsell[side]*(arrivalMid-averageFillPrice)%arrivalMid,
          fillRate:(0^filled)%qty from p };</pre></div>
-      <div class="code"><pre>q)select parentOrderID,sym,side,fillRate,slipBps from arrival[]
+      <div class="code"><pre>q)select parentOrderID,sym,side,fillRate,slipBps from 5#arrival[]
 parentOrderID sym  side fillRate slipBps
 -------------------------------------------
-P1            AAPL S    1        0.153751
-P18           META S    1        -1.109966
-P34           AAPL S    1        -0.2221816
-P53           NVDA S    1        1.071791
-P96           MSFT B    1        3.817942
-..
+P1            AAPL S    1        -0.7377269
+P11           AAPL B    1        0.4059554
+P33           JPM  B    1        -0.1406248
+P39           NVDA S    1        -0.1830865
+P73           JPM  S    1        -2.604371
 q)select wAvg:fillRate wavg slipBps from arrival[]   <span class="c">/ book-level</span></pre></div>
     </div>
   </div>
@@ -1828,15 +1927,14 @@ ivwap:{[parent;trade;execs]
        $[count v; (v`size) wavg v`px; 0n]}[trade];
   vw:f'[sp`sym; sp`startTime; sp`endTime];
   update vwap:vw, slipBps:1e4*.b.buyorsell[side]*(vw-averageFillPrice)%vw from sp };</pre></div>
-      <div class="code"><pre>q)select parentOrderID,sym,vwap,averageFillPrice,slipBps from vwap[]
-parentOrderID sym  vwap     averageFillPrice slipBps
-----------------------------------------------------------
-P1            AAPL 182.409  182.4057         -0.1796362
-P10009        TSLA 244.5488 244.5411         -0.3145837
-P10025        NVDA 121.5508 121.5508         -0.0008242294
-P10050        AMZN 179.0234 179.0216         -0.1016108
-P10117        AAPL 182.4608 182.4623         0.08397414
-..
+      <div class="code"><pre>q)5#vwap[]
+parentOrderID sym  side startTime            endTime              averageFillPrice vwap     slipBps
+--------------------------------------------------------------------------------------------------------
+P1            AAPL S    0D05:18:51.369737000 0D05:18:53.969285000 182.3895         182.3875 0.1096044
+P10048        META B    0D05:22:24.167432000 0D05:22:27.367932000 503.6252         503.6251 -0.002851989
+P10123        JPM  S    0D05:22:25.168002000 0D05:22:28.467625000 202.1123         202.1111 0.06337713
+P10134        AAPL B    0D05:22:25.268329000 0D05:23:08.467877000 182.2127         182.2188 0.3337193
+P10148        NVDA B    0D05:22:25.667797000 0D05:22:40.567518000 121.5801         121.58   -0.009494124
 
 <span class="c">/ TWAP (mean mid) and close, per sym</span>
 q).b.twap[quote;`NVDA; min quote`time; max quote`time]
@@ -1866,9 +1964,9 @@ markout:{[execs;quote;horizons]
       <div class="code"><pre>q)select averageBps:avg bps by horizon from markouts[]
 horizon             | averageBps
 --------------------| -----------
-0D00:00:01.000000000| -0.09822929
-0D00:00:10.000000000| -0.2523956
-0D00:01:00.000000000| 0.03387256    <span class="c">/ the book as a whole is near flat — the venues are not</span></pre></div>
+0D00:00:01.000000000| -0.1625728    <span class="c">/ the book as a whole is near flat; the venues are not</span>
+0D00:00:10.000000000| -0.08768744
+0D00:01:00.000000000| -0.2665073</pre></div>
     </div>
     <figure class="span" id="markout-curves" style="margin-top:6px"><a id="fig-markouts" style="position:absolute" aria-hidden="true"></a>
       <div class="fig">
@@ -1913,8 +2011,8 @@ horizon             | averageBps
   <div id="reading-markouts" class="shard-note">
     <div class="note-title">Reading a Markout Curve</div>
     <p>Computing a markout is one join. Reading one takes more care, and there are four things to look at, in this order.</p>
-    <p><b>The level at the shortest horizon.</b> This is what the fill cost you before anything else happened. A taker starts about half a spread down, because it paid to cross; a resting order starts about half a spread up, because it was paid to wait. In the live run the taker fills sit at −0.52 bps after one second and the passive fills at +0.24. Compare venues within the same kind of fill, or the mix of making and taking will pass for venue quality.</p>
-    <p><b>The slope from one horizon to the next.</b> A curve that drops and then goes flat was a one-off: someone was faster, the damage is done, and it does not grow. EDGX in the live scorecard is −0.61, −0.61, −0.59. A curve that starts near zero and keeps falling is information arriving after you traded: BATS runs −0.01, −0.20, −0.43. The first is a latency problem and the second a routing problem, and one blended number cannot tell them apart.</p>
+    <p><b>The level at the shortest horizon.</b> This is what the fill cost you before anything else happened. A taker starts about half a spread down, because it paid to cross; a resting order starts about half a spread up, because it was paid to wait. In the live run the taker fills sit at −0.41 bps after one second and the passive fills at +0.25. Compare venues within the same kind of fill, or the mix of making and taking will pass for venue quality.</p>
+    <p><b>The slope from one horizon to the next.</b> A curve that drops and then goes flat was a one-off: someone was faster, the damage is done, and it does not grow. EDGX in the live scorecard is −0.70, −0.69, −0.86. A curve that starts near zero and keeps falling is information arriving after you traded: BATS runs −0.13, −0.34, −0.76. The first is a latency problem and the second a routing problem, and one blended number cannot tell them apart.</p>
     <p><b>The sign at the longest horizon.</b> Positive and rising means the market kept moving your way after you traded, which usually reflects your own remaining order still pushing the price. Negative means you would have done better by waiting. Near zero means you paid the spread and nothing else.</p>
     <p><b>The number of fills behind each point.</b> A sixty-second markout is noisy: over ten minutes of this feed it moved by a few tenths of a basis point between runs, and settled only at thirty. Put the count beside every average, and prefer the median when the two disagree.</p>
   </div>
@@ -1941,26 +2039,26 @@ spreads:{[execs;quote;h]
   update impact:effectiveBps-realisedBps from r };</pre></div>
       <div class="code"><pre><span class="c">/ the venue scorecard — one group-by, re-run any time</span>
 q)scorecard[]
-venue horizon    numberOfFills shares  averageBps
---------------------------------------------------
-ARCA  0D00:00:01 6560          1958700 0.03383676
-ARCA  0D00:00:10 6560          1958700 0.2321477
-ARCA  0D00:01:00 6560          1958700 0.2151211
-BATS  0D00:00:01 13152         3954800 -0.01313969
-BATS  0D00:00:10 13152         3954800 -0.1966978
-BATS  0D00:01:00 13152         3954800 -0.4292279    <span class="c">/ fine at 1s, damage keeps arriving</span>
-EDGX  0D00:00:01 13022         3890200 -0.6051355    <span class="c">/ hit inside the first second, then flat</span>
-EDGX  0D00:00:10 13022         3890200 -0.6121819
-EDGX  0D00:01:00 13022         3890200 -0.5871814
-INTL  0D00:00:01 6589          1973900 0.276864      <span class="c">/ house flow, apart</span>
-INTL  0D00:00:10 6589          1973900 0.3602805
-INTL  0D00:01:00 6589          1973900 0.3640731
-MLIT  0D00:00:01 6419          1930300 0.4160894
-MLIT  0D00:00:10 6419          1930300 0.6472783
-MLIT  0D00:01:00 6419          1930300 0.7222081     <span class="c">/ midpoint: drifts your way</span>
-NSDQ  0D00:00:01 6603          1964000 0.1059876
-NSDQ  0D00:00:10 6603          1964000 0.2064598
-NSDQ  0D00:01:00 6603          1964000 0.2876108
+venue horizon              numberOfFills shares  averageBps
+------------------------------------------------------------
+ARCA  0D00:00:01.000000000 6683          2030600 -0.01522215
+ARCA  0D00:00:10.000000000 6683          2030600 0.2512425
+ARCA  0D00:01:00.000000000 6683          2030600 0.2710495
+BATS  0D00:00:01.000000000 13507         4123200 -0.1333613
+BATS  0D00:00:10.000000000 13507         4123200 -0.337155
+BATS  0D00:01:00.000000000 13507         4123200 -0.7626935    <span class="c">/ clean at first, damage keeps arriving</span>
+EDGX  0D00:00:01.000000000 13458         4058000 -0.703685    <span class="c">/ hit inside the first second, then flat</span>
+EDGX  0D00:00:10.000000000 13458         4058000 -0.6926608
+EDGX  0D00:01:00.000000000 13458         4058000 -0.8633812
+INTL  0D00:00:01.000000000 9948          2851900 0.04213108
+INTL  0D00:00:10.000000000 9948          2851900 0.2171763
+INTL  0D00:01:00.000000000 9948          2851900 0.1274421
+MLIT  0D00:00:01.000000000 13879         4404100 0.04944311
+MLIT  0D00:00:10.000000000 13879         4404100 0.2375413
+MLIT  0D00:01:00.000000000 13879         4404100 0.08989748
+NSDQ  0D00:00:01.000000000 6650          2014200 -0.02362197
+NSDQ  0D00:00:10.000000000 6650          2014200 0.1678895
+NSDQ  0D00:01:00.000000000 6650          2014200 0.07584965
 q)select effectiveBps:avg effectiveBps, impact:avg impact by venue from spreads[]</pre></div>
     </div>
   </div>
@@ -1969,7 +2067,7 @@ q)select effectiveBps:avg effectiveBps, impact:avg impact by venue from spreads[
     <div class="note-title">Why the Toxic Venue Fills You First</div>
     <p>A fill needs someone on the other side, and the question a scorecard exists to answer is who that was. On a venue where the other side is mostly slow, uninformed flow, your resting order waits its turn and fills at a price that stays fair. On a venue where the other side is fast or informed, your order fills at the moment it becomes a bad price: just before the quote moves through it. From the inside those look the same, except that the second kind fills sooner and more often.</p>
     <p>That is why <b>fill rate is a dangerous way to rank venues</b>. Availability and quality pull in opposite directions: the venue most willing to trade with you right now is disproportionately the one whose counterparties know something you do not. Rank on fill rate and you route more flow to exactly the place that costs you most.</p>
-    <p>It is also what <b>rebates</b> are for. A venue pays you to rest an order because resting is a risk: you are offering a free option to anyone faster than you. The rebate is the premium for writing that option, set by a venue that knows how often it gets exercised. In the fee lab (<a href="#lab-f2">F2</a>), BATS pays the best rebate on the street, 0.25 bps, and its one-minute markout hands back 0.24.</p>
+    <p>It is also what <b>rebates</b> are for. A venue pays you to rest an order because resting is a risk: you are offering a free option to anyone faster than you. The rebate is the premium for writing that option, set by a venue that knows how often it gets exercised. In the fee lab (<a href="#lab-f2">F2</a>), BATS pays the best rebate on the street, 0.25 bps, and its one-minute markout takes back 0.76.</p>
     <p>So read the scorecard as a row. Fill rate says how available a venue is, the short markout how fast its counterparties are, the long markout how informed they are, and the fee line what you were paid to find out.</p>
   </div>
 
@@ -2017,15 +2115,14 @@ participation:{[parent;trade;execs]
   sp:0!select startTime:min time, endTime:max time, executedQty:sum lastQty by parentOrderID, sym from execs where execType="F";
   f:{[t;sy;s;e] exec sum size from t where sym=sy, time within (s;e+.b.tapeLag)}[trade];
   update pov:executedQty%0f+f'[sp`sym;sp`startTime;sp`endTime] from sp };</pre></div>
-      <div class="code"><pre>q)select parentOrderID,sym,executedQty,pov from pov[]
-parentOrderID sym  executedQty pov
-----------------------------------------
-P1            AAPL 5000        0.170068
-P10009        TSLA 34000       0.1741803
-P10025        NVDA 40000       0.1621403
-P10050        AMZN 39000       0.1883148
-P10117        AAPL 35000       0.189087
-..
+      <div class="code"><pre>q)5#pov[]
+parentOrderID sym  startTime            endTime              executedQty pov
+-----------------------------------------------------------------------------------
+P1            AAPL 0D05:18:51.369737000 0D05:18:53.969285000 5000        0.1187648
+P10048        META 0D05:22:24.167432000 0D05:22:27.367932000 4000        0.06666667
+P10123        JPM  0D05:22:25.168002000 0D05:22:28.467625000 3000        0.04297994
+P10134        AAPL 0D05:22:25.268329000 0D05:23:08.467877000 37000       0.05109791
+P10148        NVDA 0D05:22:25.667797000 0D05:22:40.567518000 11000       0.04419446
 q)vcurve[]                  <span class="c">/ eyeball the U</span></pre></div>
     </div>
   </div>
@@ -2043,7 +2140,7 @@ q)vcurve[]                  <span class="c">/ eyeball the U</span></pre></div>
 pretrade:{[C;sigma;Q;ADV] 1e4*C*sigma*sqrt Q%0f+ADV };
 
 q).b.pretrade[0.5; 0.018; 200000; 4000000]   <span class="c">/ C·σ·sqrt(Q/ADV)</span>
-6.36   <span class="c">/ ~6 bps expected</span>
+20.12461
 
 <span class="c">/ fit C from realised shortfall</span>
 q)a:arrival[] lj select Q:sum lastQty by parentOrderID from execs where execType="F"</pre></div>
@@ -2055,12 +2152,12 @@ q)select averageBps:avg bps, medBps:med bps, clampedBps:avg .b.winsor[bps;-25f;2
     by venue from markouts[]
 venue| averageBps medBps     clampedBps n
 -----| --------------------------------------
-ARCA | 0.06024344 0.05590579 0.0564887  24654
-BATS | -0.2364877 -0.1037798 -0.2362627 48288    <span class="c">/ mean twice the median → a tail</span>
-EDGX | -0.6235995 -0.6051766 -0.6228647 48480    <span class="c">/ mean ≈ median → every fill, not a few</span>
-INTL | 0.2936637  0.3147446  0.2912843  23685
-MLIT | 0.397778   0.4339225  0.3969678  24567
-NSDQ | 0.12098    0.1350748  0.1223576  24381</pre></div>
+ARCA | 0.1690233  0.08821321 0.1725969  20049
+BATS | -0.4110699 -0.1903544 -0.3960732 40521    <span class="c">/ mean twice the median → a tail</span>
+EDGX | -0.7532423 -0.689323  -0.7403757 40374    <span class="c">/ mean ≈ median → every fill, not a few</span>
+INTL | 0.1289165  0.121774   0.1364484  29844
+MLIT | 0.1256273  0.1334315  0.1319904  41637
+NSDQ | 0.07337238 0.06481653 0.08425971 19950</pre></div>
     </div>
   </div>
 
@@ -2157,41 +2254,41 @@ rq:{[port;qry] h:hopen port; r:@[h;qry;{`$"remote error: ",x}]; hclose h; r };
 q)\l dump.q
 q)tcaEod[]
 wrote ~/Code/exec-tca-stack/tcaEod.txt
-q)end of day 2026.11.16: intraday state cleared    <span class="c">/ the engine, told by the chained TP</span></pre></div>
+q)end of day 2026.11.18: intraday state cleared    <span class="c">/ the engine, told by the chained TP</span></pre></div>
       <div class="code"><pre><span class="c">/ the RDB before, and after it has written the day down</span>
 q)rq[5011;"tables[]!count each value each tables[]"]
-execs| 1118657
-ord  | 17418
-quote| 7037440
-trade| 5135284
+execs| 8
+ord  | 2
+quote| 64
+trade| 36
 q)rq[5010;".u.endofday[]"]
 q)rq[5011;"tables[]!count each value each tables[]"]
-execs| 12             <span class="c">/ only what arrived since</span>
-ord  | 0
-quote| 128
-trade| 91
+execs| 8
+ord  | 2
+quote| 64
+trade| 36
 
 <span class="c">/ the tickerplant has rolled</span>
 q)rq[5010;"`date`log!(.u.d;.u.L)"]
-date| 2026.11.17
-log | `:./log/sym2026.11.17
+date| 2026.11.19
+log | `:./log/sym2026.11.19
 
 <span class="c">/ and the HDB now serves the day, partitioned by date, parted on sym</span>
 q)rq[5012;"select n:count i by date from execs"]
 date      | n
-----------| -------
-2026.11.16| 1118657
+----------| -----
+2026.11.18| 65165
 q)rq[5012;"select n:count i, shares:sum lastQty by date, venue from execs"]
-date       venue| n      shares
-----------------| ---------------
-2026.11.16 ARCA | 140678 43039800
-2026.11.16 BATS | 280051 85570600
-2026.11.16 EDGX | 278959 85258700
-2026.11.16 INTL | 139657 42768600
-2026.11.16 MLIT | 139484 42579500
-2026.11.16 NSDQ | 139828 42859700
+date       venue| n     shares
+----------------| -------------
+2026.11.18 ARCA | 6771  2053900
+2026.11.18 BATS | 13701 4177000
+2026.11.18 EDGX | 13664 4113800
+2026.11.18 INTL | 10127 2905000
+2026.11.18 MLIT | 14148 4491500
+2026.11.18 NSDQ | 6754  2042600
 q)key `:log/sym
-`s#`2026.11.16`sym</pre></div>
+`s#`2026.11.18`sym</pre></div>
     </div>
   </div>
 </section>
@@ -2220,18 +2317,18 @@ q)key `:log/sym
   update arrivalMidRobust:g'[p`sym;p`arrivalTime;w] from p };
 
 q)5#select parentOrderID,sym,arrivalMid,arrivalMidRobust from robust[]
-parentOrderID sym   arrivalMid arrivalMidRobust
------------------------------------------------
-P1            AAPL  182.4029   182.4028
-P17           GOOGL 166.2066   166.1941
-P36           JPM   201.7672   201.7555
-P53           AMZN  178.9121   178.9101
-P63           JPM   201.7401   201.7678
+parentOrderID sym  arrivalMid arrivalMidRobust
+----------------------------------------------
+P1            AAPL 182.4029   182.3958
+P11           AAPL 182.3972   182.3794
+P33           JPM  201.808    201.8066
+P39           NVDA 121.682    121.6822
+P73           JPM  201.8017   201.8049
 q)select n:count i, avgGapBps:avg abs 1e4*(arrivalMidRobust-arrivalMid)%arrivalMid,
     maxGapBps:max abs 1e4*(arrivalMidRobust-arrivalMid)%arrivalMid from robust[]
-n   avgGapBps maxGapBps
------------------------
-992 0.602866  3.100245    <span class="c">/ 0.6 bps apart on average, 3 at worst</span></pre></div>
+n    avgGapBps maxGapBps
+------------------------
+1029 0.511306  3.376162    <span class="c">/ half a basis point apart on average, over three at worst</span></pre></div>
     </div>
   </div>
 
@@ -2265,44 +2362,44 @@ q)select spreadBps:avg spreadBps, feeBps:avg feeBps, allInBps:avg spreadBps+feeB
     shares:sum lastQty by venue, liq from fees[]
 venue liq| spreadBps  feeBps allInBps   shares
 ---------| ------------------------------------
-ARCA  A  | -0.4891171 -0.2   -0.6891171 955600
-ARCA  R  | 0.4914537  0.3    0.7914537  1487000
-BATS  A  | -0.4929282 -0.25  -0.7429282 1883700    <span class="c">/ best rebate on the street …</span>
-BATS  R  | 0.4910762  0.29   0.7810762  2931400
-EDGX  A  | -0.4935261 -0.18  -0.6735261 1895300
-EDGX  R  | 0.4911122  0.3    0.7911122  2915400
-INTL  I  | 0          0      0          2369000    <span class="c">/ internalised: no spread, no fee</span>
-MLIT  M  | 0          0.1    0.1        2437000    <span class="c">/ midpoint, small access fee</span>
-NSDQ  A  | -0.4945663 -0.2   -0.6945663 975800
-NSDQ  R  | 0.4878012  0.3    0.7878012  1466100
+ARCA  A  | -0.3121888 -0.2   -0.5121888 291700
+ARCA  R  | 0.4891222  0.3    0.7891222  1738900
+BATS  A  | -0.3073158 -0.25  -0.5573158 546600    <span class="c">/ best rebate on the street …</span>
+BATS  R  | 0.4843019  0.29   0.7743019  3576600
+EDGX  A  | -0.2957213 -0.18  -0.4757213 537000
+EDGX  R  | 0.4867649  0.3    0.7867649  3521000
+INTL  I  | 0          0      0          2851900
+MLIT  M  | 0          0.1    0.1        4404100
+NSDQ  A  | -0.2794101 -0.2   -0.4794101 268400
+NSDQ  R  | 0.4870541  0.3    0.7870541  1745800
 
 <span class="c">/ … and what the markout then took back, by venue</span>
 q)select averageBps:avg bps by venue from markouts[] where horizon=0D00:01:00
 venue| averageBps
 -----| ----------
-ARCA | 0.3056168
-BATS | -0.2384703    <span class="c">/ … 0.25 bps to add, 0.24 handed back in a minute</span>
-EDGX | -0.3707689
-INTL | 0.4158065
-MLIT | 0.5082028
-NSDQ | 0.2540994
+ARCA | 0.2710495
+BATS | -0.7626935    <span class="c">/ … and a minute later the markout has taken back three times that</span>
+EDGX | -0.8633812
+INTL | 0.1274421
+MLIT | 0.08989748
+NSDQ | 0.07584965
 
 <span class="c">/ and by how the fill happened: making versus taking</span>
 q)select averageBps:avg bps, n:count i by liq, horizon from markouts[]
 liq horizon             | averageBps  n
-------------------------| ----------------
-A   0D00:00:01.000000000| 0.2374875   5815    <span class="c">/ earned 0.49 of spread; half is gone in a second</span>
-A   0D00:00:10.000000000| -0.02764042 5815    <span class="c">/ all of it gone by ten</span>
-A   0D00:01:00.000000000| 0.253916    5815
-I   0D00:00:01.000000000| 0.2259253   2437
-I   0D00:00:10.000000000| 0.1562682   2437
-I   0D00:01:00.000000000| 0.2723686   2437
-M   0D00:00:01.000000000| 0.3415166   2563
-M   0D00:00:10.000000000| 0.257445    2563
-M   0D00:01:00.000000000| 0.2400829   2563
-R   0D00:00:01.000000000| -0.5207419  8955    <span class="c">/ paid the spread, and it stays paid</span>
-R   0D00:00:10.000000000| -0.77776    8955
-R   0D00:01:00.000000000| -0.7999834  8955</pre></div>
+------------------------| -----------------
+A   0D00:00:01.000000000| 0.2527088   7615    <span class="c">/ resting: earned the half-spread …</span>
+A   0D00:00:10.000000000| 0.1859661   7615
+A   0D00:01:00.000000000| 0.009100398 7615    <span class="c">/ … and it is gone in a minute</span>
+I   0D00:00:01.000000000| 0.04213108  9948
+I   0D00:00:10.000000000| 0.2171763   9948
+I   0D00:01:00.000000000| 0.1274421   9948
+M   0D00:00:01.000000000| 0.04944311  13879
+M   0D00:00:10.000000000| 0.2375413   13879
+M   0D00:01:00.000000000| 0.08989748  13879
+R   0D00:00:01.000000000| -0.4116726  32683    <span class="c">/ crossing: paid the spread, and it stays paid</span>
+R   0D00:00:10.000000000| -0.3823515  32683
+R   0D00:01:00.000000000| -0.6019815  32683</pre></div>
     </div>
   </div>
 
@@ -2332,18 +2429,18 @@ q)select n:count i, avgSlip:avg slipBps, avgFillRate:avg fillRate,
     unfinished:sum fillRate&lt;1 by cohort from cohorts[]
 cohort    | n   avgSlip     avgFillRate unfinished
 ----------| --------------------------------------
-limited   | 307 0.6697696   0.8892339   65
-marketable| 685 -0.06622222 0.9968772   6
+limited   | 308 -0.06402538 0.8025634   103    <span class="c">/ a limit waits: a better price, a fifth left unfilled</span>
+marketable| 721 -0.9282599  0.9956585   5
 
 <span class="c">/ score a limited order against the tape it could actually have hit</span>
 q)5#select parentOrderID,sym,side,limitPx,averageFillPrice,vwap,inLimitVwap from limited[]
-parentOrderID sym   side limitPx  averageFillPrice vwap     inLimitVwap
------------------------------------------------------------------------
-P10217        GOOGL S    166.4    166.4103         166.4227 166.4227
-P10281        JPM   B    201.4807 201.4284         201.4404 201.4339    <span class="c">/ the limit cut the dear prints out</span>
-P10474        AMZN  S    178.698  178.7303         178.7285 178.7285
-P10497        TSLA  S    244.1801 244.335          244.3323 244.3323
-P10935        MSFT  S    417.2999 417.3934         417.4017 417.4017</pre></div>
+parentOrderID sym  side limitPx  averageFillPrice vwap     inLimitVwap
+----------------------------------------------------------------------
+P10123        JPM  S    202.0823 202.1123         202.1111 202.1133
+P1022         NVDA B    121.7288 121.7072         121.7049 121.7047
+P10370        AMZN S    178.9976 179.0042         179.0057 179.0066
+P10557        NVDA B    121.6049 121.5832         121.5771 121.577
+P11385        META S    503.3111 503.4499         503.4505 503.4503</pre></div>
     </div>
   </div>
 
@@ -2382,20 +2479,20 @@ P10935        MSFT  S    417.2999 417.3934         417.4017 417.4017</pre></div>
   t:a,'r;
   update landed:?[side="B"; (averageFillPrice-cheapest)%dearest-cheapest;
                             (dearest-averageFillPrice)%dearest-cheapest] from t };</pre></div>
-      <div class="code"><pre>q)5#select parentOrderID,sym,side,filled,averageFillPrice,pwp,cheapest,dearest,landed from pwp[]
-parentOrderID sym   side filled averageFillPrice pwp      cheapest dearest  landed
--------------------------------------------------------------------------------------
-P1            AAPL  S    5000   182.402          182.4038 182.3957 182.4106 0.5776208
-P17           GOOGL B    11000  166.182          166.1888 166.1727 166.2017 0.319408     <span class="c">/ top third of what was gettable</span>
-P36           JPM   B    10000  201.7694         201.7663 201.7477 201.783  0.6137821
-P53           AMZN  B    26200  178.8931         178.9373 178.9177 178.9544 -0.6712249   <span class="c">/ a limit that waited: beat the whole window</span>
-P63           JPM   B    12000  201.7735         201.7719 201.7578 201.7853 0.5712471
+      <div class="code"><pre>q)5#pwp[]
+parentOrderID sym  side arrivalTime          filled averageFillPrice pwp      cheapest dearest  landed
+---------------------------------------------------------------------------------------------------------
+P1            AAPL S    0D05:18:51.369542000 5000   182.3895         182.39   182.3786 182.4012 0.5182537
+P11           AAPL B    0D05:18:52.068143000 13000  182.3898         182.3783 182.3648 182.3939 0.8604666
+P33           JPM  B    0D05:18:53.768316000 10000  201.8109         201.8033 201.7879 201.8157 0.8258098
+P39           NVDA S    0D05:18:53.968793000 2000   121.6798         121.68   121.6739 121.6856 0.4969697
+P73           JPM  S    0D05:18:55.468743000 31000  201.7492         201.7569 201.7309 201.7922 0.7018055
 
 q)select n:count i, avgLanded:avg landed, medLanded:med landed by side from pwp[]
 side| n   avgLanded medLanded
 ----| -----------------------
-B   | 526 0.459257  0.493286
-S   | 466 0.4784131 0.5114748    <span class="c">/ 0 = best achievable, 1 = worst</span></pre></div>
+B   | 535 0.6334569 0.6228367
+S   | 494 0.5670059 0.6157844    <span class="c">/ 0 = best achievable, 1 = worst</span></pre></div>
     </div>
   </div>
 
@@ -2420,12 +2517,12 @@ S   | 466 0.4784131 0.5114748    <span class="c">/ 0 = best achievable, 1 = wors
 
 q)bands[]
 dt  bps
----------------
--5s 0.3258126
--1s 0.03005591
-t   -0.07624481
-+1s -0.09822929
-+5s -0.1842675     <span class="c">/ half a basis point of swing across the band</span></pre></div>
+--------------
+-5s -0.3485869
+-1s -0.2339475
+t   -0.2122911
++1s -0.1625728
++5s -0.1440234    <span class="c">/ a fifth of a basis point of swing across ten seconds of clock</span></pre></div>
     </div>
   </div>
 
@@ -2453,13 +2550,13 @@ t   -0.07624481
          execBps:slipBps+.b.buyorsell[side]*mk from a };
 
 q)5#select parentOrderID,sym,side,slipBps,mktBps,execBps from context[]
-parentOrderID sym   side slipBps     mktBps      execBps
------------------------------------------------------------
-P1            AAPL  S    -0.05113743 -0.09458902 0.0434516
-P17           GOOGL B    1.484227    2.151509    -0.6672822    <span class="c">/ looked good; the market did it</span>
-P36           JPM   B    -0.1114483  -0.3014567  0.1900084
-P53           AMZN  B    1.064556    -0.4718413  1.536398      <span class="c">/ the desk earned this one</span>
-P63           JPM   B    -1.656957   -1.514638   -0.1423191    <span class="c">/ looked bad; the market did it</span></pre></div>
+parentOrderID sym  side slipBps    mktBps    execBps
+-------------------------------------------------------
+P1            AAPL S    -0.7377269 -1.585256 0.8475296
+P11           AAPL B    0.4059554  1.238949  -0.8329931    <span class="c">/ looked good; the market did it</span>
+P33           JPM  B    -0.1406248 0.1296966 -0.2703214
+P39           NVDA S    -0.1830865 0.5144139 -0.6975005
+P73           JPM  S    -2.604371  -4.864617 2.260246    <span class="c">/ looked bad; the desk did well against it</span></pre></div>
     </div>
   </div>
 
@@ -2482,13 +2579,13 @@ P63           JPM   B    -1.656957   -1.514638   -0.1423191    <span class="c">/
   update pct:100*(rank cost)%count i by side, szBucket from f };
 
 q)5#peers[]
-parentOrderID sym  side lastPx   lastQty arrivalMid szBucket cost         pct
-----------------------------------------------------------------------------------
-P1            AAPL S    182.4129 500     182.4029   lg       0.5482368    58.9939     <span class="c">/ better than 59% of large sells</span>
-P1            AAPL S    182.4028 400     182.4029   md       -0.008073848 47.0786
-P1            AAPL S    182.3909 500     182.4029   lg       -0.6582195   33.50271    <span class="c">/ worse than two thirds of its peers</span>
-P1            AAPL S    182.4135 300     182.4029   md       0.5823336    59.32745
-P1            AAPL S    182.4147 300     182.4029   md       0.646676     60.45397</pre></div>
+parentOrderID sym  side lastPx   lastQty arrivalMid szBucket cost       pct
+--------------------------------------------------------------------------------
+P1            AAPL S    182.3929 700     182.4029   lg       -0.5482368 57.33996    <span class="c">/ better than 57% of large sells</span>
+P1            AAPL S    182.3977 300     182.4029   md       -0.2845618 56.58974
+P1            AAPL S    182.3877 700     182.4029   lg       -0.8327986 47.88447
+P1            AAPL S    182.3975 600     182.4029   lg       -0.2968758 65.08462
+P1            AAPL S    182.3875 600     182.4029   lg       -0.8451127 47.55335</pre></div>
     </div>
   </div>
 
@@ -2508,7 +2605,7 @@ P1            AAPL S    182.4147 300     182.4029   md       0.646676     60.453
 
   <h3 id="aw-wheel"><span class="n">3</span>What the Wheel Does</h3>
   <p class="lead">An <b>algo wheel</b> is the fix.<span class="mnote"><b>Why “wheel”.</b> It began as a way to strip out trader bias when comparing brokers: assign orders by a fixed rota, not by preference, so every algo is judged on a fair, comparable sample.</span> In its simplest form it is just a rule that spreads orders across the available algos — often partly at random — so each one gets a fair sample of comparable orders instead of only the orders a trader happened to trust it with. Then you score them with the TCA you've already built. The wheel "turns": algos that execute cheaply under the conditions they faced earn more of the flow, the ones that don't earn less. It is A/B testing for execution, run continuously.</p>
-  <p class="notice"><b>Two different decisions, two different levels.</b> The <i>wheel</i> chooses which <b>algo</b> gets the <b>parent</b> order — one decision, taken once, at the top. The algo's own <b>smart order router</b> (SOR) then chooses which <b>venue</b> gets each <b>child</b> slice — thousands of decisions, taken in microseconds, inside the broker. Both are measured by the same arithmetic, but from different tables and on different clocks: the wheel is judged on <code>arrival</code> slippage per <code>parentOrderID</code>, over days of flow; the SOR is judged on <code>markout</code> and <code>spreads</code> per <code>venue</code>, over individual fills. A venue scorecard that looks terrible can be an SOR problem inside an algo the wheel is right to keep — so read §Venue Scorecard before you reroute, and the wheel before you reweight.</p>
+  <p class="notice"><b>Two different decisions, two different levels.</b> The <i>wheel</i> chooses which <b>algo</b> gets the <b>parent</b> order — one decision, taken once, at the top. The algo's own <b>smart order router</b> (SOR) then chooses which <b>venue</b> gets each <b>child</b> slice — thousands of decisions, taken in microseconds, inside the broker. Both are measured by the same arithmetic, but from different tables and on different clocks: the wheel is judged on arrival slippage per <code>algoOrderID</code> (<code>algoArrival[]</code>), over days of flow; the SOR is judged on <code>markout</code> and <code>spreads</code> per <code>venue</code>, over individual fills. A venue scorecard that looks terrible can be an SOR problem inside an algo the wheel is right to keep — so read §Venue Scorecard before you reroute, and the wheel before you reweight.</p>
   <figure id="fig-wheel">
     <div class="fig">
 <svg viewBox="0 0 760 430" role="img" aria-label="The algo wheel as a cycle. Conditions (spread, order-flow imbalance, size) feed the router, which picks the algo for the parent. The algo's own smart order router places the children, which produces fills. TCA measures slippage and markouts. A learning step regresses the drivers to update the weights, which feed back into the router. The cycle repeats.">
@@ -2564,39 +2661,46 @@ P1            AAPL S    182.4147 300     182.4029   md       0.646676     60.453
       <div class="eq">\[ \hat\beta \;=\; (X^{\top}X)^{-1}X^{\top}y \]</div>
       <div class="code"><pre>.b.wheelFit:{[X;y] (inv flip[X] mmu X) mmu flip[X] mmu y };</pre></div></div>
   </div>
-  <div class="code"><pre><span class="c">/ beyond.q — the conditions each parent faced, and what it earned</span>
-.b.wheelFeatures:{[parent;trade;execs;ord]
-  a:.b.arrival[parent;execs] lj .b.cohort ord;
-  p:`parentOrderID xkey select parentOrderID,pov from .b.participation[parent;trade;execs];
-  m:select passiveShare:avg liq="A", toxicShare:avg venue=`EDGX, darkShare:avg venue in `MLIT`INTL
-      by parentOrderID from execs where execType="F";
-  t:(a lj p) lj m;
-  select parentOrderID, slipBps, limited:`float$cohort=`limited, pov, sizeK:qty%10000,
-         passiveShare, toxicShare, darkShare
-    from t where not null slipBps, not null pov };
+  <div class="code"><pre><span class="c">/ beyond.q — one row per algo order: its slippage, its algo, two controls</span>
+.b.wheelData:{[algoOrd;execs;ord]
+  a:.b.algoArrival[algoOrd;execs] lj .b.cohort ord;
+  select algoOrderID, algo, slipBps,
+         isPOV:`float$algo=`POV, isARRIVAL:`float$algo=`ARRIVAL, isDARK:`float$algo=`DARK,
+         limited:`float$cohort=`limited, sizeK:qty%10000
+    from a where not null slipBps };
 
-<span class="c">/ engine.q — fit them: bps of arrival slippage attributable to each driver</span>
-wheel:{ f:.b.wheelFeatures[parent;trade;execs;ord];
-  X:flip (count[f]#1f; f`limited; f`pov; f`sizeK; f`passiveShare; f`toxicShare; f`darkShare);
-  ([] driver:`intercept`limited`pov`sizeK`passiveShare`toxicShare`darkShare;
-      bpsPerUnit:.b.wheelFit[X; f`slipBps]) };
+<span class="c">/ beyond.q — least squares, with a standard error for every coefficient</span>
+.b.olsFit:{[X;y] xi:inv flip[X] mmu X; b:xi mmu flip[X] mmu y;
+  e:y-X mmu b; s2:(e wsum e)%count[y]-count b;
+  (b; sqrt s2*xi@'til count b) };
 
+<span class="c">/ engine.q — the wheel: bps relative to VWAP for each algo</span>
+wheel:{ f:.b.wheelData[algoOrd;execs;ord];
+  X:flip (count[f]#1f; f`isPOV; f`isARRIVAL; f`isDARK; f`limited; f`sizeK);
+  r:.b.olsFit[X; f`slipBps];
+  ([] driver:`VWAP`POV`ARRIVAL`DARK`limited`sizeK; bpsPerUnit:r 0; stdErr:r 1; tStat:r[0]%r 1) };
+
+<span class="c">/ first the plain scorecard: cost and completeness, per algo</span>
+q)algos[]
+algo    algoOrders shares  avgSlipBps medSlipBps sharesWtdBps fillRate
+-----------------------------------------------------------------------
+ARRIVAL 395        5653700 -1.015779  -0.8630931 -1.031248    0.9770298    <span class="c">/ costliest price, best fill rate</span>
+DARK    339        4612800 -0.6080558 -0.438736  -0.7699866   0.9286145
+POV     360        4442600 -0.6766704 -0.6314343 -0.7888408   0.934858
+VWAP    358        4772900 -0.417383  -0.4055511 -0.2783684   0.91117    <span class="c">/ cheapest price, worst fill rate</span>
+
+<span class="c">/ then the fit: each algo against VWAP, holding limit and size fixed</span>
 q)wheel[]
-driver       bpsPerUnit
------------------------
-intercept    -3.084609
-limited      1.004651     <span class="c">/ a limit earns about a basis point …</span>
-pov          2.294453
-sizeK        0.2691114
-passiveShare 3.164285     <span class="c">/ … and resting instead of crossing about three</span>
-toxicShare   7.840037     <span class="c">/ read with care: see below</span>
-darkShare    -2.981946
-<span class="c">/ toxicShare is positive because of how this feed is built: the price moves</span>
-<span class="c">/ against a fill AFTER it, which makes the same parent's later fills cheaper.</span>
-<span class="c">/ A fit reports what the data does, including what the simulator does.</span>
-<span class="c">/ This stack has one synthetic algo, so the drivers here are conditions (limit,</span>
-<span class="c">/ participation, size, passive share, venue mix). With several algos on a real</span>
-<span class="c">/ desk, add one flag per algo: those coefficients are what the wheel reweights.</span></pre></div>
+driver  bpsPerUnit  stdErr     tStat
+----------------------------------------
+VWAP    -0.5926675  0.1335726  -4.437043
+POV     -0.2795732  0.1469946  -1.901928    <span class="c">/ not yet distinguishable from VWAP</span>
+ARRIVAL -0.5691222  0.1436022  -3.963187    <span class="c">/ about 0.6 bps dearer than VWAP, and real: t ≈ −4</span>
+DARK    -0.1847871  0.1490797  -1.239519    <span class="c">/ nor this</span>
+limited 0.8366045   0.112571   7.431792    <span class="c">/ a limit earns most of a basis point</span>
+sizeK   -0.05584841 0.05047364 -1.106487</pre></div>
+  <p>Read the two tables together. The scorecard says the arrival algo got the worst price and VWAP the best, which on its own would route everything to VWAP. The fill-rate column says why not: VWAP left 9% of its shares unfilled against the arrival algo’s 2%, because it rests and waits, and when the price runs away from a resting order the order is simply left behind. The fit then says how much of the price difference is real. Only the arrival algo’s is: about 0.6 bps, four standard errors from zero. POV and Dark are within noise of VWAP after 23 minutes of flow.</p>
+  <p>That is the honest output of an algo wheel. Assignment is random, so the comparison is fair, but most of the differences a desk cares about are a few tenths of a basis point, and it takes a lot of flow to resolve them. A wheel that reweights on the first week’s averages is reweighting on noise; one that waits for the standard errors to shrink is not. <code>drivers[]</code> fits the same slippage on <i>how</i> each order was traded — passive share, venue mix, participation — and is the place to look for why an algo costs what it does, but not for which algo to choose: those are things the algo does, so they would soak up the very effect the wheel is trying to measure.</p>
   <p>This is the whole argument of multi-dimensional TCA (<i>Talos</i>, <i>Sparrow</i>): the benchmarks were never meant to be more numbers for a report — they are the feedback the router reads. And the regression that fits them is one line of q, <code>(inv flip[X] mmu X) mmu flip[X] mmu y</code>, over the very same <code>execs</code> and <code>quote</code> tables every other lab in this document used.</p>
 </section>
 
@@ -2689,7 +2793,7 @@ darkShare    -2.981946
 </section>
 
 <footer>
-  <span class="ok">exec-tca-stack</span> — a complete execution-analysis tick stack in about 620 lines of q. Equities, regular hours, signed bps. Companion to <i>The Order &amp; Trade Lifecycle</i>: that doc is how an intention becomes a settled trade; this one is what the fill cost once it did.
+  <span class="ok">exec-tca-stack</span> — a complete execution-analysis tick stack in about 620 lines of q. Equities, regular hours, signed bps. Trilogy Part Two. Part One, <a href="https://rohanshiloh.github.io/order-trade-lifecycle/"><i>The Order &amp; Trade Lifecycle</i></a>, is the map; this is the territory; Part Three, <i>Sharded Ticks</i>, is the machine.
 </footer>
 </div>
 <a class="totop" href="#contents">↑ Contents</a>

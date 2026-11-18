@@ -41,10 +41,15 @@ tcaQueries:(
   "5#peers[]";
   "select n:count i, avgCost:avg cost, medCost:med cost by side, szBucket from peers[]";
   "5#.b.wheelFeatures[parent;trade;execs;ord]";
+  "select algoOrders:count i, parents:count distinct parentOrderID by algo from algoOrd";
+  "5#algoArrival[]";
+  "algos[]";
   "wheel[]";
-  "5#select tot:distinct cumQty+leaves by parentOrderID from execs";
-  "count select from execs where 1<({count distinct x};cumQty+leaves) fby parentOrderID";
-  "5#(select pq:first qty by parentOrderID from parent) lj select cum:last cumQty by parentOrderID from execs where execType=\"F\"";
+  "drivers[]";
+  "select n:count i, avgPassive:avg liq=\"A\", avgDark:avg liq in \"MI\" by algo from execs";
+  "5#select tot:distinct cumQty+leaves by algoOrderID from execs";
+  "count select from execs where 1<({count distinct x};cumQty+leaves) fby algoOrderID";
+  "5#(select aq:first qty by algoOrderID from algoOrd) lj select cum:last cumQty by algoOrderID from execs where execType=\"F\"";
   "(count execs; count select from execs where i=(first;i) fby childOrderID)";
   "select parentOrderID,sym,side,fillRate,slipBps from 5#arrival[]";
   "5#.b.shortfall[parent;execs; exec arrivalMid from 0!parent; (exec sym!closePx from closes[]) exec sym from 0!parent]";

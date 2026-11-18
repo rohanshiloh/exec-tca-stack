@@ -30,6 +30,20 @@ shortfall:{[parent;execs;decisionMid;endPx]
          oppBps  :(1-fillRate)*1e4*.b.buyorsell[side]*(arrivalMid-endPx)%decisionMid
     from a };
 
+/ the same, one level down: each algo order against the mid when the algo got it.
+/ This is the number an algo wheel scores.
+algoArrival:{[algoOrd;execs]
+  f:select averageFillPrice:(sum lastPx*lastQty)%sum lastQty, filled:sum lastQty
+      by algoOrderID from execs where execType="F";
+  a:0!(algoOrd lj f);
+  update slipBps:1e4*.b.buyorsell[side]*(arrivalMid-averageFillPrice)%arrivalMid,
+         fillRate:(0^filled)%qty from a };
+
+/ per algo: cost and completeness side by side, never one without the other
+algoScorecard:{[aa] 0!select algoOrders:count i, shares:sum 0^filled,
+    avgSlipBps:avg slipBps, medSlipBps:med slipBps where not null slipBps, sharesWtdBps:(0^filled) wavg slipBps,
+    fillRate:avg fillRate by algo from aa };
+
 / ── VWAP (interval) ──────────────────────────────────────────────────────
 / the tape over each parent's own active window [first fill; last fill].
 ivwap:{[parent;trade;execs]

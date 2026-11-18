@@ -1,4 +1,7 @@
 / exec-tca-stack : schema
+/ One event table per message class. Orders are a hierarchy: a parent (the PM's
+/ order) is worked as one or more algo orders (one per broker algo), each sliced
+/ into child orders, each of which may fill several times.
 / One event table per message class. tick.q loads this as its schema file,
 / so every table must open with `time`sym (tick.q enforces 2#key = `time`sym)
 / and carry `g#sym for fast by-sym selection in the RDB and CEP.
@@ -15,12 +18,14 @@ trade:([]                                   / the consolidated tape (prints)
   px:`float$(); size:`long$() )
 
 ord:([]                                      / order events: new / replace / cancel
-  time:`timespan$(); sym:`g#`symbol$(); parentOrderID:`symbol$(); childOrderID:`symbol$();
+  time:`timespan$(); sym:`g#`symbol$(); parentOrderID:`symbol$();
+  algoOrderID:`symbol$(); algo:`symbol$(); childOrderID:`symbol$();
   side:`char$(); ordType:`char$(); qty:`long$(); limitPx:`float$();
   tif:`char$(); venue:`symbol$(); msgType:`symbol$() )
 
 execs:([]                                     / execution reports (fills, busts, acks)
-  time:`timespan$(); sym:`g#`symbol$(); parentOrderID:`symbol$(); childOrderID:`symbol$();
+  time:`timespan$(); sym:`g#`symbol$(); parentOrderID:`symbol$();
+  algoOrderID:`symbol$(); algo:`symbol$(); childOrderID:`symbol$();
   side:`char$(); execType:`char$(); lastPx:`float$(); lastQty:`long$();
   leaves:`long$(); cumQty:`long$(); venue:`symbol$(); liq:`char$() )
 
