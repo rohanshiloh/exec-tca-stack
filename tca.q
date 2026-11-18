@@ -10,7 +10,7 @@ TP:$[count .z.x; first .z.x; ":5013"];
 / end of day, relayed by the chained tickerplant: start the new day empty
 .u.end:{[d] {@[`.;x;0#]} each `quote`trade`ord`execs;
   @[;`sym;`g#] each `quote`trade`ord`execs;
-  delete from `parent; delete from `algoOrd; delete from `alerts;
+  delete from `parent; delete from `algoOrd; delete from `alerts; delete from `venueAlerts;
   topMid::(`symbol$())!`float$();                   / no stale mid from yesterday
   -1"end of day ",string[d],": intraday state cleared"; };
 
@@ -18,8 +18,11 @@ TP:$[count .z.x; first .z.x; ":5013"];
 / Exception-based: the table stays empty until something needs a human.
 alerts:([] time:`timespan$(); algo:`symbol$(); n:`long$(); recentBps:`float$();
   baseBps:`float$(); z:`float$(); recentFill:`float$(); baseFill:`float$());
-.z.ts:{ if[0=count execs; :()]; e:exceptions[]; now:max execs`time;
-  if[count e; `alerts insert (cols alerts)#update time:now from e] };
+venueAlerts:([] time:`timespan$(); venue:`symbol$(); n:`long$(); recentBps:`float$();
+  baseBps:`float$(); z:`float$());
+.z.ts:{ if[0=count execs; :()]; now:max execs`time;
+  e:exceptions[]; if[count e; `alerts insert (cols alerts)#update time:now from e];
+  v:venueExceptions[]; if[count v; `venueAlerts insert (cols venueAlerts)#update time:now from v] };
 system"t 10000";
 
--1"tca → subscribed @ ",TP,"   try:  arrival[]  scorecard[]  algoScorecard[]  wheelPaired[]  alerts";
+-1"tca → subscribed @ ",TP,"   try:  arrival[]  scorecard[]  algoScorecard[]  wheelPaired[]  alerts  venueAlerts";

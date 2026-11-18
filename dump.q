@@ -58,6 +58,13 @@ tcaQueries:(
   "-5#alerts";
   "select from venueMix[] where algo in `VWAP`DARK";
   "top5[]";
+  "count venueAlerts";
+  ".b.venueExceptions[spreads[]; max execs`time; 0D00:05; 50; 0f]";
+  "pid:first exec parentOrderID from parent where filledQty>0";
+  "12#audit pid";
+  "5#bars[]";
+  "daySummary[]";
+  "select sym, maxDiff:abs vwap-bv from daySummary[] lj select bv:(sum notional)%sum volume by sym from bars[]";
   "drivers[]";
   "select n:count i, avgPassive:avg liq=\"A\", avgDark:avg liq in \"MI\" by algo from execs";
   "5#select tot:distinct cumQty+leaves by algoOrderID from execs";
@@ -74,6 +81,8 @@ tcaQueries:(
   "a:update pred:1e4*sigma*sqrt Q%adv from a lj sq";
   "fitC:(sum a[`pred]*a`costBps)%sum a[`pred]*a`pred";
   "select n:count i, costBps:avg costBps, modelBps:fitC*avg pred by sizeBucket:5 xrank Q from a";
+  "vsModel fitC";
+  ".b.vsModel[algoArrival[]; trade; fitC; max execs`time; 0D00:05; 20; 0f]";
   "select averageBps:avg bps, medBps:med bps, clampedBps:avg .b.winsor[bps;-25f;25f], n:count i by venue from markouts[]";
   "\\t do[20; scorecard[]]";
   "tcaLog[]";

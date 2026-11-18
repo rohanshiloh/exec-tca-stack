@@ -74,6 +74,11 @@ peers:{ .b.pctScore[parent;execs] };
 exceptions:{ .b.exceptions[algoArrival[]; max execs`time; 0D00:05; 20; 3f] };   / last 5 min, 20+ orders, |z|>3
 venueMix:{ .b.venueMix execs };
 top5:{ .b.top5 execs };
+vsModel:{[C] .b.vsModel[algoArrival[]; trade; C; max execs`time; 0D00:05; 20; 3f] };
+venueExceptions:{ .b.venueExceptions[spreads[]; max execs`time; 0D00:05; 50; 3f] };
+audit:{[pid] .b.audit[parent;ord;execs;quote;pid] };
+bars:{ .b.bars trade };
+daySummary:{ .b.daySummary trade };
 / the wheel: arrival slippage per algo order, fitted on which algo it went to.
 / Each coefficient is bps relative to VWAP, after allowing for limit and size.
 wheel:{ f:.b.wheelData[algoOrd;execs;ord];

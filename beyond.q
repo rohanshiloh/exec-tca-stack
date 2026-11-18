@@ -183,3 +183,47 @@
       pctPassive:100*avg liq="A", pctAggressive:100*avg liq="R" by venue from f;
   v:update pctVol:100*vol%sum vol, pctOrders:100*nOrd%sum nOrd from 0!v;
   5#`pctVol xdesc select venue, pctVol, pctOrders, pctPassive, pctAggressive from v };
+
+/ F8, against a model: each algo order's realised cost against the square-root
+/ estimate for its size (§Market Impact), so "expected" means what this order
+/ should have cost, not what the algo cost earlier today. C is the fitted constant.
+.b.vsModel:{[aa;trade;C;now;w;minN;zMax]
+  sq:select adv:sum size, sigma:dev 1_deltas log px by sym from trade;
+  a:select algo, sym, arrivalTime, costBps:neg slipBps, Q:filled from aa where filled>0;
+  a:update expBps:C*1e4*sigma*sqrt Q%adv from a lj sq;
+  r:select n:count i, costBps:avg costBps, expBps:avg expBps, sd:dev costBps-expBps
+    by algo from a where arrivalTime>now-w;
+  t:update z:(costBps-expBps)%sd%sqrt n from 0!r;
+  select from t where n>=minN, zMax<abs z };
+
+/ F8, per venue: recent realised spread (+ = cost) against the venue's session baseline
+.b.venueExceptions:{[sp;now;w;minN;zMax]
+  b:select baseBps:avg realisedBps, sd:dev realisedBps by venue from sp;
+  r:select n:count i, recentBps:avg realisedBps by venue from sp where time>now-w;
+  t:update z:(recentBps-baseBps)%sd%sqrt n from 0!r lj b;
+  select venue, n, recentBps, baseBps, z from t where n>=minN, zMax<abs z };
+
+/ ── F11 the audit trail ──────────────────────────────────────────────────
+/ one parent, event by event: its NEW, each algo order's NEW, every fill, each with
+/ the quote that prevailed at that instant, the running fill and the slippage so far
+.b.audit:{[parent;ord;execs;quote;pid]
+  o:select time, sym, event:?[null algoOrderID; `parentNEW; `algoNEW], algo, algoOrderID,
+      venue, qty, px:limitPx from ord where parentOrderID=pid, msgType=`NEW;
+  f:select time, sym, event:`fill, algo, algoOrderID, venue, qty:lastQty, px:lastPx
+      from execs where parentOrderID=pid, execType="F";
+  t:aj[`sym`time; `time xasc o,f; select time,sym,bid,ask from quote];
+  am:first exec arrivalMid from parent where parentOrderID=pid;
+  sd:first exec side from parent where parentOrderID=pid;
+  update mid:0.5*bid+ask, cumQty:sums ?[event=`fill; qty; 0],
+         slipBps:?[event=`fill; 1e4*.b.buyorsell[sd]*(am-px)%am; 0n] from t };
+
+/ ── production: one-minute bars and a daily summary ─────────────────────
+/ Score a large HDB from these, not from raw ticks. Built from the tape at end of
+/ day (or live, minute by minute); VWAP over bars is exact: sum notional % sum volume.
+.b.bars:{[trade]
+  0!select open:first px, high:max px, low:min px, close:last px,
+      volume:sum size, notional:sum px*size, prints:count i
+    by sym, minute:0D00:01 xbar time from trade };
+.b.daySummary:{[trade]
+  0!select firstTime:first time, lastTime:last time, open:first px, high:max px,
+      low:min px, close:last px, volume:sum size, vwap:size wavg px by sym from trade };

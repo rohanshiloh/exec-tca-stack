@@ -279,9 +279,10 @@ mjx-container svg{max-width:100%}
     <li><a href="#lab-f8"><span class="tn">F8</span>Live Exceptions</a></li>
     <li><a href="#lab-f9"><span class="tn">F9</span>Venue Mix by Algo</a></li>
     <li><a href="#lab-f10"><span class="tn">F10</span>The Top-Five Venue Report</a></li>
+    <li><a href="#lab-f11"><span class="tn">F11</span>The Audit Trail</a></li>
   </ol></div>
   <div><h4><a href="#algo-wheel">The Algo Wheel</a></h4><ol><li><a href="#aw-algo">What an Algo Is</a></li><li><a href="#aw-problem">Which One, When?</a></li><li><a href="#aw-wheel">What the Wheel Does</a></li><li><a href="#aw-controller">From Scorecard to Controller</a></li></ol></div>
-  <div><h4><a href="#mistakes">Ten Ways to Get It Wrong</a></h4><ol><li><a href="#mistakes"><span class="tn">·</span>The checklist</a></li></ol></div>
+  <div><h4><a href="#mistakes">Eleven Ways to Get It Wrong</a></h4><ol><li><a href="#mistakes"><span class="tn">·</span>The checklist</a></li></ol></div>
   <div><h4><a href="#production">Production Notes</a></h4><ol><li><a href="#pr-kafka">Kafka Ingest</a></li><li><a href="#pr-access">A Data-access Layer</a></li><li><a href="#pr-realdata">Real Tick Data</a></li><li><a href="#pr-writedown">Writing the Day Down</a></li></ol></div>
   <div><h4><a href="#five-rules">Five Rules</a></h4><ol><li><a href="#five-rules"><span class="tn">·</span>What to keep</a></li></ol></div>
   <div><h4><a href="#references">References</a></h4><ol><li><a href="#references"><span class="tn">·</span>Microstructure &amp; Order Books</a></li><li><a href="#references"><span class="tn">·</span>kdb+ Plumbing</a></li><li><a href="#references"><span class="tn">·</span>TCA &amp; Data</a></li></ol></div>
@@ -1007,7 +1008,7 @@ system"t 100";                                 / drive the feed every 100ms
       </div>
     </details>
     <details class="srcfile" id="src-engine">
-      <summary><span class="fn">engine.q</span><span class="role">state + handlers + benchmark wrappers</span><span class="lc">101 lines</span></summary>
+      <summary><span class="fn">engine.q</span><span class="role">state + handlers + benchmark wrappers</span><span class="lc">106 lines</span></summary>
       <div class="body">
         <div class="desc">The core. Holds the live tables, keeps a <code>topMid</code> per sym, stamps arrival price on every parent at its <code>NEW</code>, folds fills into parent state, and exposes the no-argument benchmark wrappers. Loaded by both the live CEP and the replay path, so one code path serves real-time and batch.</div>
         <div class="code"><pre>/ exec-tca-stack : the TCA engine
@@ -1086,6 +1087,11 @@ peers:{ .b.pctScore[parent;execs] };
 exceptions:{ .b.exceptions[algoArrival[]; max execs`time; 0D00:05; 20; 3f] };   / last 5 min, 20+ orders, |z|&gt;3
 venueMix:{ .b.venueMix execs };
 top5:{ .b.top5 execs };
+vsModel:{[C] .b.vsModel[algoArrival[]; trade; C; max execs`time; 0D00:05; 20; 3f] };
+venueExceptions:{ .b.venueExceptions[spreads[]; max execs`time; 0D00:05; 50; 3f] };
+audit:{[pid] .b.audit[parent;ord;execs;quote;pid] };
+bars:{ .b.bars trade };
+daySummary:{ .b.daySummary trade };
 / the wheel: arrival slippage per algo order, fitted on which algo it went to.
 / Each coefficient is bps relative to VWAP, after allowing for limit and size.
 wheel:{ f:.b.wheelData[algoOrd;execs;ord];
@@ -1257,7 +1263,7 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
       </div>
     </details>
     <details class="srcfile" id="src-beyond">
-      <summary><span class="fn">beyond.q</span><span class="role">beyond-vanilla benchmarks — the F labs</span><span class="lc">185 lines</span></summary>
+      <summary><span class="fn">beyond.q</span><span class="role">beyond-vanilla benchmarks — the F labs</span><span class="lc">229 lines</span></summary>
       <div class="body">
         <div class="desc">Robust arrival, fee-aware cost, the marketable/limited split, the PWP range, point-in-time bands, execution versus market, and percentile scoring. Defined from the root with explicit <code>.b.</code> names, because KDB-X does not fall back to the root for reads made inside a namespace.</div>
         <div class="code"><pre>/ exec-tca-stack : beyond-vanilla TCA  (the F labs; extends the .b namespace)
@@ -1444,11 +1450,55 @@ volcurve:{[trade] 0!select vol:sum size by bar:0D00:05:00 xbar time from trade }
   v:select vol:sum lastQty, nOrd:count distinct algoOrderID,
       pctPassive:100*avg liq="A", pctAggressive:100*avg liq="R" by venue from f;
   v:update pctVol:100*vol%sum vol, pctOrders:100*nOrd%sum nOrd from 0!v;
-  5#`pctVol xdesc select venue, pctVol, pctOrders, pctPassive, pctAggressive from v };</pre></div>
+  5#`pctVol xdesc select venue, pctVol, pctOrders, pctPassive, pctAggressive from v };
+
+/ F8, against a model: each algo order's realised cost against the square-root
+/ estimate for its size (§Market Impact), so "expected" means what this order
+/ should have cost, not what the algo cost earlier today. C is the fitted constant.
+.b.vsModel:{[aa;trade;C;now;w;minN;zMax]
+  sq:select adv:sum size, sigma:dev 1_deltas log px by sym from trade;
+  a:select algo, sym, arrivalTime, costBps:neg slipBps, Q:filled from aa where filled&gt;0;
+  a:update expBps:C*1e4*sigma*sqrt Q%adv from a lj sq;
+  r:select n:count i, costBps:avg costBps, expBps:avg expBps, sd:dev costBps-expBps
+    by algo from a where arrivalTime&gt;now-w;
+  t:update z:(costBps-expBps)%sd%sqrt n from 0!r;
+  select from t where n&gt;=minN, zMax&lt;abs z };
+
+/ F8, per venue: recent realised spread (+ = cost) against the venue's session baseline
+.b.venueExceptions:{[sp;now;w;minN;zMax]
+  b:select baseBps:avg realisedBps, sd:dev realisedBps by venue from sp;
+  r:select n:count i, recentBps:avg realisedBps by venue from sp where time&gt;now-w;
+  t:update z:(recentBps-baseBps)%sd%sqrt n from 0!r lj b;
+  select venue, n, recentBps, baseBps, z from t where n&gt;=minN, zMax&lt;abs z };
+
+/ ── F11 the audit trail ──────────────────────────────────────────────────
+/ one parent, event by event: its NEW, each algo order's NEW, every fill, each with
+/ the quote that prevailed at that instant, the running fill and the slippage so far
+.b.audit:{[parent;ord;execs;quote;pid]
+  o:select time, sym, event:?[null algoOrderID; `parentNEW; `algoNEW], algo, algoOrderID,
+      venue, qty, px:limitPx from ord where parentOrderID=pid, msgType=`NEW;
+  f:select time, sym, event:`fill, algo, algoOrderID, venue, qty:lastQty, px:lastPx
+      from execs where parentOrderID=pid, execType="F";
+  t:aj[`sym`time; `time xasc o,f; select time,sym,bid,ask from quote];
+  am:first exec arrivalMid from parent where parentOrderID=pid;
+  sd:first exec side from parent where parentOrderID=pid;
+  update mid:0.5*bid+ask, cumQty:sums ?[event=`fill; qty; 0],
+         slipBps:?[event=`fill; 1e4*.b.buyorsell[sd]*(am-px)%am; 0n] from t };
+
+/ ── production: one-minute bars and a daily summary ─────────────────────
+/ Score a large HDB from these, not from raw ticks. Built from the tape at end of
+/ day (or live, minute by minute); VWAP over bars is exact: sum notional % sum volume.
+.b.bars:{[trade]
+  0!select open:first px, high:max px, low:min px, close:last px,
+      volume:sum size, notional:sum px*size, prints:count i
+    by sym, minute:0D00:01 xbar time from trade };
+.b.daySummary:{[trade]
+  0!select firstTime:first time, lastTime:last time, open:first px, high:max px,
+      low:min px, close:last px, volume:sum size, vwap:size wavg px by sym from trade };</pre></div>
       </div>
     </details>
     <details class="srcfile" id="src-tca">
-      <summary><span class="fn">tca.q</span><span class="role">live CEP — loads engine.q</span><span class="lc">25 lines</span></summary>
+      <summary><span class="fn">tca.q</span><span class="role">live CEP — loads engine.q</span><span class="lc">28 lines</span></summary>
       <div class="body">
         <div class="desc">The live process. Loads the engine and subscribes to the <b>chained</b> tickerplant on 5013, so a slow query here can never back up the order-flow plant. Once up, the benchmark wrappers are prompt commands: <code>arrival[]</code>, <code>markouts[]</code>, <code>scorecard[]</code>.</div>
         <div class="code"><pre>/ exec-tca-stack : live TCA CEP  (chained-TP subscriber)
@@ -1463,7 +1513,7 @@ TP:$[count .z.x; first .z.x; ":5013"];
 / end of day, relayed by the chained tickerplant: start the new day empty
 .u.end:{[d] {@[`.;x;0#]} each `quote`trade`ord`execs;
   @[;`sym;`g#] each `quote`trade`ord`execs;
-  delete from `parent; delete from `algoOrd; delete from `alerts;
+  delete from `parent; delete from `algoOrd; delete from `alerts; delete from `venueAlerts;
   topMid::(`symbol$())!`float$();                   / no stale mid from yesterday
   -1"end of day ",string[d],": intraday state cleared"; };
 
@@ -1471,11 +1521,14 @@ TP:$[count .z.x; first .z.x; ":5013"];
 / Exception-based: the table stays empty until something needs a human.
 alerts:([] time:`timespan$(); algo:`symbol$(); n:`long$(); recentBps:`float$();
   baseBps:`float$(); z:`float$(); recentFill:`float$(); baseFill:`float$());
-.z.ts:{ if[0=count execs; :()]; e:exceptions[]; now:max execs`time;
-  if[count e; `alerts insert (cols alerts)#update time:now from e] };
+venueAlerts:([] time:`timespan$(); venue:`symbol$(); n:`long$(); recentBps:`float$();
+  baseBps:`float$(); z:`float$());
+.z.ts:{ if[0=count execs; :()]; now:max execs`time;
+  e:exceptions[]; if[count e; `alerts insert (cols alerts)#update time:now from e];
+  v:venueExceptions[]; if[count v; `venueAlerts insert (cols venueAlerts)#update time:now from v] };
 system"t 10000";
 
--1"tca → subscribed @ ",TP,"   try:  arrival[]  scorecard[]  algoScorecard[]  wheelPaired[]  alerts";</pre></div>
+-1"tca → subscribed @ ",TP,"   try:  arrival[]  scorecard[]  algoScorecard[]  wheelPaired[]  alerts  venueAlerts";</pre></div>
       </div>
     </details>
     <details class="srcfile" id="src-replay">
@@ -1548,7 +1601,7 @@ bps:{ 0.01*floor 0.5+100*x };                 / round to 2dp for the eye
       </div>
     </details>
     <details class="srcfile" id="src-dump">
-      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">140 lines</span></summary>
+      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">149 lines</span></summary>
       <div class="body">
         <div class="desc"><code>\l dump.q</code> then <code>tcaDump[]</code> in the TCA tab runs every benchmark and writes the output to <code>tcaData.txt</code>. Each query is trapped, so one failure prints its error and the rest still run. The outputs in this document came from it.</div>
         <div class="code"><pre>/ exec-tca-stack : write TCA diagnostics to tcaData.txt
@@ -1611,6 +1664,13 @@ tcaQueries:(
   "-5#alerts";
   "select from venueMix[] where algo in `VWAP`DARK";
   "top5[]";
+  "count venueAlerts";
+  ".b.venueExceptions[spreads[]; max execs`time; 0D00:05; 50; 0f]";
+  "pid:first exec parentOrderID from parent where filledQty&gt;0";
+  "12#audit pid";
+  "5#bars[]";
+  "daySummary[]";
+  "select sym, maxDiff:abs vwap-bv from daySummary[] lj select bv:(sum notional)%sum volume by sym from bars[]";
   "drivers[]";
   "select n:count i, avgPassive:avg liq=\"A\", avgDark:avg liq in \"MI\" by algo from execs";
   "5#select tot:distinct cumQty+leaves by algoOrderID from execs";
@@ -1627,6 +1687,8 @@ tcaQueries:(
   "a:update pred:1e4*sigma*sqrt Q%adv from a lj sq";
   "fitC:(sum a[`pred]*a`costBps)%sum a[`pred]*a`pred";
   "select n:count i, costBps:avg costBps, modelBps:fitC*avg pred by sizeBucket:5 xrank Q from a";
+  "vsModel fitC";
+  ".b.vsModel[algoArrival[]; trade; fitC; max execs`time; 0D00:05; 20; 0f]";
   "select averageBps:avg bps, medBps:med bps, clampedBps:avg .b.winsor[bps;-25f;25f], n:count i by venue from markouts[]";
   "\\t do[20; scorecard[]]";
   "tcaLog[]";
@@ -2443,8 +2505,8 @@ q)key `:log/sym
 <!-- ───────────── LABS · BEYOND VANILLA ───────────── -->
 <section class="part" id="labs-advanced"><a id="beyond" style="position:absolute" aria-hidden="true"></a>
   <h2>Labs — Beyond Vanilla TCA</h2>
-  <p class="lead">Arrival, VWAP and markouts are table stakes. The techniques below are what separates a desk's analytics from a spreadsheet — drawn from how practitioners actually do it: Talos on robust arrival and fee-aware, limit-aware benchmarks; Chris Sparrow on the two-dimensional PWP range; OneTick on point-in-time latency bands; ICE on scoring where there is no tape; and the live exceptions, venue mix and best-execution reports every vendor TCA ships. Each is a few lines of q because each is, underneath, a sort or an <code>aj</code>.</p>
-  <p class="notice">These live in <code>beyond.q</code>, which <code>engine.q</code> loads after <code>bench.q</code>; nothing in the core library depends on them. Each has a wrapper at the TCA prompt — <code>robust[]</code>, <code>fees[]</code>, <code>cohorts[]</code>, <code>limited[]</code>, <code>pwp[]</code>, <code>bands[]</code>, <code>context[]</code>, <code>peers[]</code>, <code>exceptions[]</code>, <code>venueMix[]</code>, <code>top5[]</code> — and every output below is from a live run of this stack.</p>
+  <p class="lead">Arrival, VWAP and markouts are table stakes. The techniques below are what separates a desk's analytics from a spreadsheet — drawn from how practitioners actually do it: Talos on robust arrival and fee-aware, limit-aware benchmarks; Chris Sparrow on the two-dimensional PWP range; OneTick on point-in-time latency bands; ICE on scoring where there is no tape; and the live exceptions, venue mix, best-execution report and audit trail every vendor TCA ships. Each is a few lines of q because each is, underneath, a sort or an <code>aj</code>.</p>
+  <p class="notice">These live in <code>beyond.q</code>, which <code>engine.q</code> loads after <code>bench.q</code>; nothing in the core library depends on them. Each has a wrapper at the TCA prompt — <code>robust[]</code>, <code>fees[]</code>, <code>cohorts[]</code>, <code>limited[]</code>, <code>pwp[]</code>, <code>bands[]</code>, <code>context[]</code>, <code>peers[]</code>, <code>exceptions[]</code>, <code>venueMix[]</code>, <code>top5[]</code>, <code>audit</code> — and every output below is from a live run of this stack.</p>
 
   <!-- F1 -->
   <div class="lab" id="lab-f1">
@@ -2744,7 +2806,8 @@ P1            AAPL S    182.4099 400     182.4029   md       0.3816425  67.68724
       <div class="where">Run in <span class="tag tsh">TCA</span></div>
       <p>A strategy is backtested with a cost in it: two bps of slippage, a 95% fill rate. Those are model assumptions like any other, and when live execution drifts away from them the strategy looks as if its signal is decaying. Retire it then and you have retired a good signal for an execution problem.</p>
       <p>The fix is to watch execution against its own expectations while the day is still running. For each algo, compare the algo orders of the last five minutes with the session so far, and raise an exception only when the recent mean sits more than three standard errors away, on at least twenty orders. The CEP checks every ten seconds and appends to <code>alerts</code>, which stays empty until something needs a human. That is the difference between monitoring and a dashboard nobody reads.</p>
-      <p class="notice">The baseline here is the session itself, so a day that starts badly looks normal. In production, the baseline is the wheel's history for that algo, or the <code>.b.pretrade</code> estimate for each order (<a href="#market-impact">§Market Impact</a>).</p>
+      <p>Two baselines are better than one. <code>exceptions[]</code> asks whether an algo has changed since this morning; <code>vsModel</code> asks whether its orders are costing more than their size says they should, using the square-root estimate from <a href="#market-impact">§Market Impact</a>. The router gets the same treatment: <code>venueAlerts</code> flags a venue whose realised spread has moved away from its own session baseline.</p>
+      <p class="notice">A session baseline cannot see a day that starts badly. In production, the baseline is the wheel's history for that algo and the venue's history on the scorecard, carried over from the HDB.</p>
     </div>
     <div class="cmds">
       <div class="code"><pre><span class="c">/ ── F8 live exceptions ───────────────────────────────────────────────────</span>
@@ -2760,17 +2823,41 @@ P1            AAPL S    182.4099 400     182.4029   md       0.3816425  67.68724
   t:update z:(recentBps-baseBps)%sd%sqrt n from 0!r lj b;
   select algo, n, recentBps, baseBps, z, recentFill, baseFill from t where n&gt;=minN, zMax&lt;abs z };
 
-<span class="c">/ tca.q — the live check</span>
+<span class="c">/ tca.q — the live check, per algo and per venue</span>
 <span class="c">/ F8 live: every 10s, append any algo running away from its own baseline.</span>
 <span class="c">/ Exception-based: the table stays empty until something needs a human.</span>
 alerts:([] time:`timespan$(); algo:`symbol$(); n:`long$(); recentBps:`float$();
   baseBps:`float$(); z:`float$(); recentFill:`float$(); baseFill:`float$());
-.z.ts:{ if[0=count execs; :()]; e:exceptions[]; now:max execs`time;
-  if[count e; `alerts insert (cols alerts)#update time:now from e] };
+venueAlerts:([] time:`timespan$(); venue:`symbol$(); n:`long$(); recentBps:`float$();
+  baseBps:`float$(); z:`float$());
+.z.ts:{ if[0=count execs; :()]; now:max execs`time;
+  e:exceptions[]; if[count e; `alerts insert (cols alerts)#update time:now from e];
+  v:venueExceptions[]; if[count v; `venueAlerts insert (cols venueAlerts)#update time:now from v] };
 system"t 10000";
 
 q)alerts                                         <span class="c">/ empty is the good answer</span>
-q).b.exceptions[algoArrival[]; max execs`time; 0D00:05; 20; 0f]   <span class="c">/ zMax 0: every algo's z</span></pre></div>
+q).b.exceptions[algoArrival[]; max execs`time; 0D00:05; 20; 0f]   <span class="c">/ zMax 0: every algo's z</span>
+q)venueAlerts                                    <span class="c">/ the router's half of the same check</span></pre></div>
+      <div class="code"><pre><span class="c">/ F8, against a model: each algo order's realised cost against the square-root</span>
+<span class="c">/ estimate for its size (§Market Impact), so "expected" means what this order</span>
+<span class="c">/ should have cost, not what the algo cost earlier today. C is the fitted constant.</span>
+.b.vsModel:{[aa;trade;C;now;w;minN;zMax]
+  sq:select adv:sum size, sigma:dev 1_deltas log px by sym from trade;
+  a:select algo, sym, arrivalTime, costBps:neg slipBps, Q:filled from aa where filled&gt;0;
+  a:update expBps:C*1e4*sigma*sqrt Q%adv from a lj sq;
+  r:select n:count i, costBps:avg costBps, expBps:avg expBps, sd:dev costBps-expBps
+    by algo from a where arrivalTime&gt;now-w;
+  t:update z:(costBps-expBps)%sd%sqrt n from 0!r;
+  select from t where n&gt;=minN, zMax&lt;abs z };
+
+<span class="c">/ F8, per venue: recent realised spread (+ = cost) against the venue's session baseline</span>
+.b.venueExceptions:{[sp;now;w;minN;zMax]
+  b:select baseBps:avg realisedBps, sd:dev realisedBps by venue from sp;
+  r:select n:count i, recentBps:avg realisedBps by venue from sp where time&gt;now-w;
+  t:update z:(recentBps-baseBps)%sd%sqrt n from 0!r lj b;
+  select venue, n, recentBps, baseBps, z from t where n&gt;=minN, zMax&lt;abs z };
+
+q)vsModel fitC                                   <span class="c">/ fitC from §Market Impact</span></pre></div>
     </div>
   </div>
 
@@ -2780,7 +2867,7 @@ q).b.exceptions[algoArrival[]; max execs`time; 0D00:05; 20; 0f]   <span class="c
       <h3><span class="n">F9</span>Venue Mix by Algo</h3>
       <div class="where">Run in <span class="tag tsh">TCA</span><span class="tag tany">CTRL</span></div>
       <p>The wheel scores an algo on its slippage; this lab shows where that slippage was made. For each algo, the share of its shares that went to each venue, and how much of it was passive. A dark algo that quietly routes a third of its flow to the toxic lit venue is a different algo from the one in its brochure.</p>
-      <p class="notice">Vendors also report a <b>hit ratio</b> per venue: child orders filled over child orders sent. This feed publishes a child only when it fills, so the denominator is not in the data. A real EMS sends every child's NEW and CANCEL, and the ratio becomes one more <code>count</code> in this query.</p>
+      <p class="notice">Vendors also report a <b>hit ratio</b> per venue: child orders filled over child orders sent. This feed publishes a child only when it fills, so the denominator is not in the data. A real EMS sends every child's NEW and CANCEL, and the ratio becomes one more <code>count</code> in this query. The same messages, with their send and acknowledgement timestamps, give the other two venue numbers vendors report: <b>latency</b> (send to ack) and <b>rejection rate</b>.</p>
     </div>
     <div class="cmds">
       <div class="code"><pre><span class="c">/ ── F9 venue mix ─────────────────────────────────────────────────────────</span>
@@ -2815,6 +2902,35 @@ q)select from venueMix[] where algo in `VWAP`DARK</pre></div>
   5#`pctVol xdesc select venue, pctVol, pctOrders, pctPassive, pctAggressive from v };
 
 q)top5[]</pre></div>
+    </div>
+  </div>
+
+  <!-- F11 -->
+  <div class="lab" id="lab-f11"><a id="audit" style="position:absolute" aria-hidden="true"></a>
+    <div class="notes">
+      <h3><span class="n">F11</span>The Audit Trail: One Order, Event by Event</h3>
+      <div class="where">Run in <span class="tag tsh">TCA</span><span class="tag tany">CTRL</span></div>
+      <p>Every number in this document is an average, and averages are what a client never asks about. They ask about <i>their</i> order: why it cost what it did. The answer is the order's own history, every event in time order with the market as it stood at that instant, so the reader can see the quote the algo saw when it decided.</p>
+      <p>Union the parent's and algo orders' NEW rows with the fills, sort by time, and one <code>aj</code> stamps each event with the prevailing bid and ask. A running sum gives the fill so far, and each fill's slippage against arrival shows where the cost came in.</p>
+      <p class="notice">This is also what a best-execution review asks for: the decision context, not just the outcome. If an event is not in <code>ord</code> or <code>execs</code>, it cannot be in the trail, which is the case for capturing every message in-band.</p>
+    </div>
+    <div class="cmds">
+      <div class="code"><pre><span class="c">/ ── F11 the audit trail ──────────────────────────────────────────────────</span>
+<span class="c">/ one parent, event by event: its NEW, each algo order's NEW, every fill, each with</span>
+<span class="c">/ the quote that prevailed at that instant, the running fill and the slippage so far</span>
+.b.audit:{[parent;ord;execs;quote;pid]
+  o:select time, sym, event:?[null algoOrderID; `parentNEW; `algoNEW], algo, algoOrderID,
+      venue, qty, px:limitPx from ord where parentOrderID=pid, msgType=`NEW;
+  f:select time, sym, event:`fill, algo, algoOrderID, venue, qty:lastQty, px:lastPx
+      from execs where parentOrderID=pid, execType="F";
+  t:aj[`sym`time; `time xasc o,f; select time,sym,bid,ask from quote];
+  am:first exec arrivalMid from parent where parentOrderID=pid;
+  sd:first exec side from parent where parentOrderID=pid;
+  update mid:0.5*bid+ask, cumQty:sums ?[event=`fill; qty; 0],
+         slipBps:?[event=`fill; 1e4*.b.buyorsell[sd]*(am-px)%am; 0n] from t };
+
+q)pid:first exec parentOrderID from parent where filledQty&gt;0
+q)12#audit pid</pre></div>
     </div>
   </div>
 
@@ -3014,7 +3130,7 @@ sizeK   -0.1246076  0.1000023  -1.246047 -0.01317544 0.00787961</pre></div>
 
 <!-- ───────────── MISTAKES ───────────── -->
 <section class="part" id="mistakes">
-  <h2>Ten Ways to Get This Wrong</h2>
+  <h2>Eleven Ways to Get This Wrong</h2>
   <p class="lead">These are scattered through the labs as warnings; collected here they make a checklist. Every one of them produces a number that is arithmetically correct and practically false — which is what makes them durable. None is hypothetical.</p>
   <div class="mistakes"><div class="mistake"><div class="mn">01</div><div><h4>Using VWAP as the only benchmark</h4><p>It asks whether you traded like everyone else, not whether you traded well. An order that is half the volume in a name <i>is</i> the VWAP, and beats it by construction. Pair it with arrival or it flatters your biggest orders most.</p></div></div>
     <div class="mistake"><div class="mn">02</div><div><h4>Quoting slippage without fill rate</h4><p>+4 bps on 20% filled is a worse outcome than −1 bps on 98%, and the first number looks better in every report. <code>fillRate</code> belongs in the same <code>select</code>, every time.</p></div></div>
@@ -3025,7 +3141,8 @@ sizeK   -0.1246076  0.1000023  -1.246047 -0.01317544 0.00787961</pre></div>
     <div class="mistake"><div class="mn">07</div><div><h4>Ignoring opportunity cost</h4><p>Every benchmark that scores only the fills rewards an algo for not trading. The unfilled remainder has a price; weight the drift by <code>1-fillRate</code> and put it in the same table.</p></div></div>
     <div class="mistake"><div class="mn">08</div><div><h4>Mixing marketable and limited orders</h4><p>A buy limited at $100 could never have traded through $100, so the prints above it don't belong in its benchmark. Scoring a limited order against the full-window VWAP compares it to a market it was never in.</p></div></div>
     <div class="mistake"><div class="mn">09</div><div><h4>Reconstructing book state afterwards</h4><p>Spread, depth and queue position at the moment of placement are not recoverable from history — the book has moved on and your own order is gone from it. Stamp them on the <code>ord</code> row in-band or lose them.</p></div></div>
-    <div class="mistake"><div class="mn">10</div><div><h4>Breaking point-in-time correctness</h4><p>Score a 10:00:00 fill against a 10:00:02 mid and you have smuggled two seconds of hindsight into the number. In kdb+ this is the difference between <code>aj</code> and an ordinary join, and it is silent.</p></div></div></div>
+    <div class="mistake"><div class="mn">10</div><div><h4>Breaking point-in-time correctness</h4><p>Score a 10:00:00 fill against a 10:00:02 mid and you have smuggled two seconds of hindsight into the number. In kdb+ this is the difference between <code>aj</code> and an ordinary join, and it is silent.</p></div></div>
+    <div class="mistake"><div class="mn">11</div><div><h4>Counting every print in VWAP</h4><p>A real tape carries odd lots, opening and closing auction prints, out-of-sequence reports and late trades, each flagged with a condition code. Leave them in and your VWAP includes trades you could never have joined; the auction print alone can be a fifth of the day. Filter on an eligibility flag set once at ingest (<a href="#pr-vwap">§Production Notes</a>). This stack's synthetic tape has no conditions, which is exactly why the mistake is easy to carry into production.</p></div></div></div>
 </section>
 
 <!-- ───────────── PRODUCTION ───────────── -->
@@ -3065,6 +3182,19 @@ q)\t vwap[]
 q)\t vwapFast[]</pre></div>
     <p>Two things to keep it honest. The cumulative columns belong on the tape itself in production, written once as prints arrive or at end of day, so the sums are not rebuilt per query. And restrict them to VWAP-eligible prints (no odd lots, auctions or out-of-sequence trades), or the fast answer will be fast and wrong.</p>
     <p>The same white paper's other lesson is to pre-compute. A firm scoring a 37,000-symbol HDB does not scan raw ticks: it keeps one-minute bars (open, high, low, close, volume, notional) and a daily summary per sym with the open, close and auction times, and answers most TCA questions from those. Raw ticks are for the questions bars cannot answer, such as markouts at one second.</p>
+    <div class="code"><pre><span class="c">/ ── production: one-minute bars and a daily summary ─────────────────────</span>
+<span class="c">/ Score a large HDB from these, not from raw ticks. Built from the tape at end of</span>
+<span class="c">/ day (or live, minute by minute); VWAP over bars is exact: sum notional % sum volume.</span>
+.b.bars:{[trade]
+  0!select open:first px, high:max px, low:min px, close:last px,
+      volume:sum size, notional:sum px*size, prints:count i
+    by sym, minute:0D00:01 xbar time from trade };
+.b.daySummary:{[trade]
+  0!select firstTime:first time, lastTime:last time, open:first px, high:max px,
+      low:min px, close:last px, volume:sum size, vwap:size wavg px by sym from trade };
+
+q)select sym, maxDiff:abs vwap-bv from daySummary[] lj select bv:(sum notional)%sum volume by sym from bars[]   <span class="c">/ 0: exact</span></pre></div>
+    <p>The same tables are what you hand another provider when a client wants their TCA elsewhere: bars, the daily summary and the fills, written out with <code>save</code> as CSV or as Parquet through PyKX. Exporting raw ticks is rarely needed and rarely wise.</p>
   </div>
   <div id="pr-writedown" class="shard-note">
     <div class="note-title">Writing the Day Down</div>
