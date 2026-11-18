@@ -192,12 +192,12 @@ footer .ok{color:var(--ok);font-weight:600}
 .companion{font-size:12.5px;color:var(--muted);border-left:2px solid var(--lav);padding-left:10px;max-width:640px}
 .companion a{color:var(--accent)}
 code,pre,th,h1,h2,h3,h4,.byline,.meta,.toc{hyphens:none;-webkit-hyphens:none}
-.themebtn,.expandbtn{font:inherit;font-size:11.5px;color:var(--muted);background:none;border:1px solid var(--rule);border-radius:4px;padding:2px 8px;cursor:pointer}
+.themebtn,.expandbtn{font:inherit;font-size:11.5px;color:var(--muted);background:none;border:1px solid var(--line);border-radius:4px;padding:2px 8px;cursor:pointer}
 .themebtn:hover,.expandbtn:hover{color:var(--fg);border-color:var(--muted)}
 .themebtn:focus-visible,.expandbtn:focus-visible,.totop:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .expandbtn{margin:0 0 10px}
 .totop{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:5;font-size:11.5px;
-  color:var(--muted);background:var(--bg);border:1px solid var(--rule);border-radius:999px;padding:5px 11px;text-decoration:none;opacity:.9}
+  color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:5px 11px;text-decoration:none;opacity:.9}
 .totop:hover{color:var(--fg)}
 @media print{.totop,.themebtn,.expandbtn,.copy{display:none!important}body{background:#fff}.sheet{border:0;box-shadow:none;max-width:none;margin:0;padding:0}
   details.srcfile>.body{display:block}section{break-inside:auto}figure,.lab,.shard-note{break-inside:avoid}}
@@ -738,13 +738,13 @@ cd exec-tca-stack
 set -e
 tmp=$(mktemp -d)
 git clone --depth 1 https://github.com/KxSystems/kdb-tick "$tmp/kdb-tick"
-mkdir -p tick log
+mkdir -p tick log/sym           # log/sym is the HDB directory the RDB writes to at end of day
 cp "$tmp/kdb-tick/tick.q" .
 cp "$tmp/kdb-tick/tick/u.q" "$tmp/kdb-tick/tick/r.q" tick/
 curl -sL https://raw.githubusercontent.com/KxSystems/kdb/master/tick/chainedtick.q -o tick/chainedtick.q
 ln -sf ../sym.q tick/sym.q      # tick.q loads its schema from tick/
 rm -rf "$tmp"
-echo "ready: tick.q, tick/u.q, tick/r.q, tick/chainedtick.q, tick/sym.q -&gt; ../sym.q, log/"</pre></div>
+echo "ready: tick.q, tick/u.q, tick/r.q, tick/chainedtick.q, tick/sym.q -&gt; ../sym.q, log/sym/"</pre></div>
   </details>
   <button class="expandbtn" id="expandbtn" type="button">Expand all files</button>
   <div class="srcfiles">
@@ -1749,7 +1749,7 @@ q)\\          <span class="c">/ or just exit</span></pre></div>
       <tr><td>Opportunity cost</td><td>(1-fillRate)*1e4*φ*(arrivalMid-endPx)%decisionMid</td><td>What did the shares I never got cost me?</td><td>partial fills</td><td>needs an end price you can defend</td></tr>
       <tr><td>Interval VWAP</td><td>(v`size) wavg v`px</td><td>Did I beat the tape over my own window?</td><td>algo comparison</td><td>gameable — you pick the window</td></tr>
       <tr><td>TWAP</td><td>avg 0.5*q[`bid]+q`ask</td><td>Did I beat the clock?</td><td>schedule trading</td><td>ignores when the volume actually arrived</td></tr>
-      <tr><td>PWP</td><td>pwpRange[trade;sy;startTime;Q;tenor]</td><td>Did I beat my own opportunity set?</td><td>POV execution</td><td>harder to explain to a PM</td></tr>
+      <tr><td>PWP</td><td>pwpRange[trade;tenor;sy;startTime;Q]</td><td>Did I beat my own opportunity set?</td><td>POV execution</td><td>harder to explain to a PM</td></tr>
       <tr><td>Close</td><td>last px by sym</td><td>Did I beat the print everyone quotes?</td><td>index and benchmark funds</td><td>silent about the path you took</td></tr>
       <tr><td>Markout</td><td>aj[`sym`time; time+h; quote]</td><td>Was I picked off after I traded?</td><td>venue and toxicity analysis</td><td>needs clean quotes past the last fill</td></tr>
       <tr><td>Effective spread <span class="g">(+ = cost)</span></td><td>1e4*2*φ*(lastPx-mid0)%lastPx</td><td>What did immediacy cost me, right then?</td><td>microstructure, fee comparison</td><td>is not the total cost</td></tr>
@@ -1835,7 +1835,7 @@ q)\\          <span class="c">/ or just exit</span></pre></div>
       <div class="eq">\[ m_h \;=\; 10^{4}\,\phi\,\frac{M_{t+h}-P_{\text{fill}}}{P_{\text{fill}}} \]</div>
       <div class="code"><pre>1e4*.b.buyorsell[side]*((0.5*bid+ask)-lastPx)%lastPx</pre></div></div>
     <div class="fxrow"><div class="lbl">effective spread · impact = effective − realised <i>(positive = cost paid)</i></div>
-      <div class="eq">\[ \text{effective} = 2\phi\,\frac{P_{\text{fill}}-M_{t}}{P_{\text{fill}}},\qquad \text{impact}=\text{effective}-\text{realised} \]</div>
+      <div class="eq">\[ \text{effective} = 10^{4}\cdot 2\phi\,\frac{P_{\text{fill}}-M_{t}}{P_{\text{fill}}},\qquad \text{impact}=\text{effective}-\text{realised} \]</div>
       <div class="code"><pre>1e4*2*.b.buyorsell[side]*(lastPx-mid0)%lastPx</pre></div></div>
     <div class="fxrow"><div class="lbl">square-root pre-trade cost</div>
       <div class="eq">\[ \mathcal{C} \;\approx\; 10^{4}\,C\,\sigma\,\sqrt{\frac{Q}{\text{ADV}}} \]</div>
@@ -2767,21 +2767,25 @@ P1            AAPL S    182.4099 400     182.4029   md       0.3816425  67.68724
   <div class="code"><pre><span class="c">/ beyond.q — one row per algo order: its slippage, its algo, two controls</span>
 .b.wheelData:{[algoOrd;execs;ord]
   a:.b.algoArrival[algoOrd;execs] lj .b.cohort ord;
-  select algoOrderID, algo, slipBps,
+  select algoOrderID, parentOrderID, algo, slipBps,
          isPOV:`float$algo=`POV, isARRIVAL:`float$algo=`ARRIVAL, isDARK:`float$algo=`DARK,
          limited:`float$cohort=`limited, sizeK:qty%10000
     from a where not null slipBps };
 
-<span class="c">/ beyond.q — least squares, with a standard error for every coefficient</span>
-.b.olsFit:{[X;y] xi:inv flip[X] mmu X; b:xi mmu flip[X] mmu y;
-  e:y-X mmu b; s2:(e wsum e)%count[y]-count b;
-  (b; sqrt s2*xi@'til count b) };
+<span class="c">/ beyond.q — least squares, errors clustered by parent: the two halves of a split</span>
+<span class="c">/ parent share a market, so they are not independent draws</span>
+.b.olsCluster:{[X;y;g] xi:inv flip[X] mmu X; b:xi mmu flip[X] mmu y; e:y-X mmu b;
+  m:sum {[X;e;i] v:flip[X i] mmu e i; v*/:v}[X;e] each value group g;
+  G:count distinct g;
+  (b; sqrt (G%G-1)*(xi mmu m mmu xi)@'til count b) };
 
 <span class="c">/ engine.q — the wheel: bps relative to VWAP for each algo</span>
 wheel:{ f:.b.wheelData[algoOrd;execs;ord];
   X:flip (count[f]#1f; f`isPOV; f`isARRIVAL; f`isDARK; f`limited; f`sizeK);
-  r:.b.olsFit[X; f`slipBps];
-  ([] driver:`VWAP`POV`ARRIVAL`DARK`limited`sizeK; bpsPerUnit:r 0; stdErr:r 1; tStat:r[0]%r 1) };
+  r:.b.olsCluster[X; f`slipBps; f`parentOrderID];       / errors clustered by parent
+  / VWAPbase is the intercept: a market VWAP order of zero size. The algo rows are
+  / DIFFERENCES from it, so ARRIVAL's total is VWAPbase + ARRIVAL.
+  ([] driver:`VWAPbase`POV`ARRIVAL`DARK`limited`sizeK; bpsPerUnit:r 0; stdErr:r 1; tStat:r[0]%r 1) };
 
 <span class="c">/ first the plain scorecard: cost and completeness, per algo</span>
 q)algoScorecard[]
