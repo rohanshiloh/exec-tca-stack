@@ -154,17 +154,19 @@
     by parentOrderID from a };
 
 / ── F8 live exceptions ───────────────────────────────────────────────────
-/ The backtest's execution assumptions are model assumptions too. Per algo, the
-/ algo orders that arrived in the last w against the session so far: flag an algo
-/ only when its recent mean sits more than zMax standard errors from its baseline,
-/ on at least minN orders. (The baseline includes the recent orders, so the test
-/ is conservative.)
-.b.exceptions:{[aa;now;w;minN;zMax]
-  aa:select from aa where filled>0;
-  b:select baseBps:avg slipBps, sd:dev slipBps, baseFill:avg fillRate by algo from aa;
-  r:select n:count i, recentBps:avg slipBps, recentFill:avg fillRate by algo from aa where arrivalTime>now-w;
-  t:update z:(recentBps-baseBps)%sd%sqrt n from 0!r lj b;
-  select algo, n, recentBps, baseBps, z, recentFill, baseFill from t where n>=minN, zMax<abs z };
+/ The backtest's execution assumptions are model assumptions too. Per algo: the
+/ mean slippage of the last window of algo orders against the means of every
+/ earlier window. Windows, not orders, are the observations: orders from the same
+/ parent and the same minute move together, and treating them as independent
+/ makes ordinary noise look like a 3-sigma event. Orders younger than h are
+/ still working, so their slippage is not final yet; they wait.
+.b.exceptions:{[aa;now;w;h;minW;zMax]
+  e:now-h; aa:select from aa where filled>0, arrivalTime<e;
+  r:select n:count i, recentBps:avg slipBps, recentFill:avg fillRate by algo from aa where arrivalTime>e-w;
+  b:select m:avg slipBps, f:avg fillRate by algo, wb:w xbar arrivalTime from aa where arrivalTime<=e-w;
+  b:select nW:count i, baseBps:avg m, sd:dev m, baseFill:avg f by algo from b;
+  t:update z:(recentBps-baseBps)%sd from 0!r lj b;
+  select algo, n, recentBps, baseBps, z, recentFill, baseFill from t where nW>=minW, zMax<abs z };
 
 / ── F9 venue mix ─────────────────────────────────────────────────────────
 / where each algo's shares actually went, and how it got them
@@ -196,12 +198,15 @@
   t:update z:(costBps-expBps)%sd%sqrt n from 0!r;
   select from t where n>=minN, zMax<abs z };
 
-/ F8, per venue: recent realised spread (+ = cost) against the venue's session baseline
-.b.venueExceptions:{[sp;now;w;minN;zMax]
-  b:select baseBps:avg realisedBps, sd:dev realisedBps by venue from sp;
-  r:select n:count i, recentBps:avg realisedBps by venue from sp where time>now-w;
-  t:update z:(recentBps-baseBps)%sd%sqrt n from 0!r lj b;
-  select venue, n, recentBps, baseBps, z from t where n>=minN, zMax<abs z };
+/ F8, per venue: the same test on realised spread (+ = cost). A fill younger than
+/ h has no mid h later yet, so its realised spread is not real; it waits too.
+.b.venueExceptions:{[sp;now;w;h;minW;zMax]
+  e:now-h; sp:select from sp where time<e;
+  r:select n:count i, recentBps:avg realisedBps by venue from sp where time>e-w;
+  b:select m:avg realisedBps by venue, wb:w xbar time from sp where time<=e-w;
+  b:select nW:count i, baseBps:avg m, sd:dev m by venue from b;
+  t:update z:(recentBps-baseBps)%sd from 0!r lj b;
+  select venue, n, recentBps, baseBps, z from t where nW>=minW, zMax<abs z };
 
 / ── F11 the audit trail ──────────────────────────────────────────────────
 / one parent, event by event: its NEW, each algo order's NEW, every fill, each with
@@ -298,7 +303,7 @@
 .b.dayBench:{[parent;execs;trade;prevCl]
   a:select parentOrderID, sym, side, time:arrivalTime, averageFillPrice from .b.arrival[parent;execs] where filled>0;
   c:update cn:sums px*size, cv:sums size by sym from select time,sym,px,size from trade;
-  a:aj[`sym`time; a; select sym,time,cn,cv from c];
+  a:aj[`sym`time; a; update `g#sym from select sym,time,cn,cv from c];
   a:a lj select open:first px, high:max px, low:min px, close:last px by sym from trade;
   a:update phi:.b.buyorsell side, prevClose:prevCl sym, availVwap:cn%cv,
            lhoc:0.25*low+high+open+close, midHL:0.5*high+low from a;

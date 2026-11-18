@@ -68,7 +68,7 @@ ivwapFast:{[trade;execs]
   sp:0!select startTime:min time, endTime:max time, averageFillPrice:(sum lastPx*lastQty)%sum lastQty
        by parentOrderID, sym, side from execs where execType="F";
   c:update cn:sums px*size, cv:sums size by sym from select time,sym,px,size from trade;
-  c:select sym,time,cn,cv from c;
+  c:update `g#sym from select sym,time,cn,cv from c;          / keep the index for aj
   e:aj[`sym`time; select sym, time:endTime+.b.tapeLag from sp; c];       / sums at the end
   s:aj[`sym`time; select sym, time:startTime-0D00:00:00.000000001 from sp; c];  / just before start
   vw:((0^e`cn)-0^s`cn)%(0^e`cv)-0^s`cv;                                    / 0%0 -> 0n: no prints

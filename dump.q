@@ -52,7 +52,7 @@ tcaQueries:(
   "count .b.wheelPairs[algoOrd;execs]";
   "5#.b.wheelPairs[algoOrd;execs]";
   "wheelPaired[]";
-  ".b.exceptions[algoArrival[]; max execs`time; 0D00:05; 20; 0f]";
+  ".b.exceptions[algoArrival[]; max execs`time; 0D00:02; 0D00:01; 5; 0f]";
   "exceptions[]";
   "count alerts";
   "alerts";
@@ -61,7 +61,7 @@ tcaQueries:(
   "select from venueMix[] where algo in `VWAP`DARK";
   "top5[]";
   "count venueAlerts";
-  ".b.venueExceptions[spreads[]; max execs`time; 0D00:05; 50; 0f]";
+  ".b.venueExceptions[spreads[]; max execs`time; 0D00:02; 0D00:00:10; 5; 0f]";
   "pid:first exec parentOrderID from parent where filledQty>0";
   "12#audit pid";
   "5#bars[]";
@@ -87,7 +87,7 @@ tcaQueries:(
   "vsModel fitC";
   "costCurve fitC";
   "5#shortfall4[]";
-  "select n:count i, ops:avg opsBps, timing:avg timingBps, exec:avg execBps, opp:avg oppBps, total:avg isBps, maxGap:max abs isBps-opsBps+timingBps+execBps+oppBps from shortfall4[]";
+  "select n:count i, ops:avg opsBps, timing:avg timingBps, execution:avg execBps, opp:avg oppBps, total:avg isBps, maxGap:max abs isBps-opsBps+timingBps+execBps+oppBps from shortfall4[]";
   ".b.istar[10f;200f;100000%950000]";
   "5#dayBench[]";
   "select n:count i, prevClose:avg vsPrevClose, open:avg vsOpen, availVwap:avg vsAvailVwap, lhoc:avg vsLHOC, midHL:avg vsMidHL, close:avg vsClose by side from dayBench[]";
@@ -103,7 +103,6 @@ tcaQueries:(
   "system \"sh -c 'q replay.q /tmp/exec-tca-cut.log -q </dev/null 2>&1; true'\"";
   "rq[5010;\"`date`messages`log!(.u.d;.u.i;.u.L)\"]";
   "rq[5010;\"count each .u.w\"]";
-  "rq[5010;\"key each .u.w\"]";
   "rq[5010;\"sum each .z.W\"]";
   "rq[5013;\"count each .u.w\"]";
   "rq[5011;\"tables[]!count each value each tables[]\"]";
