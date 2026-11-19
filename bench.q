@@ -89,7 +89,7 @@ markout:{[execs;quote;horizons]
      }[quote;f];
   raze mo each horizons };
 
-/ the venue scorecard — the table the routing table should be reading.
+/ the venue scorecard — what the router should be reading.
 scorecard:{[mk] 0!select numberOfFills:count i, shares:sum lastQty, averageBps:avg bps
   by venue, horizon from mk };
 
