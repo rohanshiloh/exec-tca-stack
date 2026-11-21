@@ -93,6 +93,9 @@ tcaQueries:(
   "select n:count i, prevClose:avg vsPrevClose, open:avg vsOpen, availVwap:avg vsAvailVwap, lhoc:avg vsLHOC, midHL:avg vsMidHL, close:avg vsClose by side from dayBench[]";
   "5#brokerReport[]";
   "select n:count i, priceImpr:avg priceImprBps, vsDayVwap:avg vsDayVwapBps, range:avg rangeCapture, feasible:avg feasibleFill by liveBucket:5 xrank liveSec from brokerReport[] where filled>0";
+  "select n:count i, better:avg slipBps>0, worse:avg slipBps<0, avgSlip:avg slipBps by side from arrival[] where filled>0";
+  "a:select parentOrderID,sym,side,qty,fillRate,slipBps from arrival[] where filled>0";
+  "(5#`slipBps xasc a),5#`slipBps xdesc a";
   ".b.vsModel[algoArrival[]; trade; fitC; max execs`time; 0D00:05; 20; 0f]";
   "select averageBps:avg bps by venue from markouts[] where horizon=0D00:01:00";
   "select averageBps:avg bps, medBps:med bps, clampedBps:avg .b.winsor[bps;-25f;25f], n:count i by venue from markouts[]";

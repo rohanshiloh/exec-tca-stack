@@ -63,7 +63,7 @@ code{font-family:var(--mono);font-size:.86em}
 tr.expl td{background:color-mix(in srgb,var(--s1) 10%,transparent)}
 .charts .fig svg{min-width:300px}
 .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:22px 32px;margin:12px 0}.charts figure{margin:0;min-width:0}
-.code .k{color:var(--s0);font-weight:600}.code .y{color:var(--s1)}.code .s{color:var(--ok)}.code .d{color:var(--sig)}.code .z{color:var(--sh)}.code .p{color:var(--muted)}
+.code .k{color:var(--s0);font-weight:600}.code .o{color:var(--sh);font-weight:700}.code .b{color:var(--muted)}.code .y{color:var(--s1)}.code .s{color:var(--ok)}.code .d{color:var(--sig)}.code .z{color:var(--lav)}.code .p{color:var(--muted)}
 details summary{cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:500}
 details[open] summary{margin-bottom:8px}
 .tbl{overflow-x:auto}
@@ -131,8 +131,8 @@ h1{letter-spacing:.02em}
 svg text[font-style="italic"]{font-variant-caps:small-caps;font-style:normal;letter-spacing:.03em}
 h3 .n,.logmodes h4{font-variant-caps:normal;font-feature-settings:normal;letter-spacing:.04em}
 :root{--sage:#5f7a5c;--rose:#a35d6a;--lav:#6d6597;--apricot:#a3653a;--euc:#4d7775;--mauve:#7e5a7e;--sage-t:#eef2ec;--rose-t:#f7ecee;--lav-t:#efedf6;--apricot-t:#f8efe6;--euc-t:#eaf2f1;--mauve-t:#f4ecf3;}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--sage-t:#1d251c;--rose-t:#2b1d21;--lav-t:#221f2e;--apricot-t:#2c2219;--euc-t:#1a2625;--mauve-t:#271d27;}}
-:root[data-theme="dark"]{--sage-t:#1d251c;--rose-t:#2b1d21;--lav-t:#221f2e;--apricot-t:#2c2219;--euc-t:#1a2625;--mauve-t:#271d27;}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--sage-t:#1d251c;--rose-t:#2b1d21;--lav-t:#221f2e;--lav:#a99fd6;--apricot-t:#2c2219;--euc-t:#1a2625;--mauve-t:#271d27;}}
+:root[data-theme="dark"]{--sage-t:#1d251c;--rose-t:#2b1d21;--lav-t:#221f2e;--lav:#a99fd6;--apricot-t:#2c2219;--euc-t:#1a2625;--mauve-t:#271d27;}
 #chained-note{--bar:var(--lav);background:var(--lav-t)!important}
 #signed-bps{--bar:var(--apricot);background:var(--apricot-t)!important}
 #internalise{--bar:var(--euc);background:var(--euc-t)!important}
@@ -309,7 +309,7 @@ mjx-container svg{max-width:100%}
     <div class="fig">
 <svg viewBox="0 0 960 290" role="img" aria-label="One parent order to buy 100,000 shares is sliced into small child orders, each sent to a different trading venue over time. No single venue sees the whole order.">
   <defs><marker id="sl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
-  <g font-family="JetBrains Mono,monospace" font-size="10.5" fill="var(--muted)" letter-spacing=".06em">
+  <g font-family="JetBrains Mono,monospace" font-size="10.5" fill="var(--muted)" letter-spacing=".06em" text-anchor="middle">
     <text x="120" y="24">ONE ORDER</text><text x="360" y="24">SLICED INTO CHILDREN</text><text x="635" y="24">SENT TO VENUES</text>
   </g>
   <rect x="40" y="78" width="160" height="150" rx="5" fill="var(--s0-bg)" stroke="var(--s0)" stroke-width="1.5"/>
@@ -426,8 +426,8 @@ mjx-container svg{max-width:100%}
   <g font-family="Schibsted Grotesk,sans-serif" font-size="11.5">
     <text x="982" y="225" fill="var(--bad)" font-weight="600">drift / impact</text>
     <text x="982" y="239" fill="var(--muted)" font-size="10">the invisible part</text>
-    <text x="982" y="180" fill="var(--sh)" font-weight="600">spread crossed</text>
-    <text x="982" y="166" fill="var(--muted)" font-size="10">the visible part</text>
+    <text x="982" y="168" fill="var(--sh)" font-weight="600">spread crossed</text>
+    <text x="982" y="181" fill="var(--muted)" font-size="10">the visible part</text>
     <text x="982" y="270" fill="var(--s1)" font-weight="600">= shortfall</text>
   </g>
 </svg>
@@ -440,9 +440,9 @@ mjx-container svg{max-width:100%}
   <div class="tbl"><table class="wide">
     <thead><tr><th>Cost</th><th>What causes it</th><th>Whose doing</th><th>How visible</th><th>How easy to measure</th><th>Where it shows up here</th></tr></thead>
     <tbody>
-      <tr class="expl"><td>Commission &amp; fees <span class="g">(explicit)</span></td><td>Broker commission, exchange fees, clearing, taxes.</td><td>Agreed in advance.</td><td>High: it is on the invoice</td><td>Easy</td><td><code>fees[]</code> (F2)</td></tr>
+      <tr class="expl"><td>Commission &amp; fees <span class="g">(explicit)</span></td><td>Broker commission, exchange fees, clearing, taxes.</td><td>Agreed in advance.</td><td>High: it is on the invoice</td><td>Easy</td><td><code>fees[]</code> (F2): venue fees and rebates only; commission is not modelled</td></tr>
       <tr><td>Spread cost</td><td>You crossed to trade now instead of waiting.</td><td>Yours, by choice — it buys immediacy.</td><td>High</td><td>Easy</td><td><code>effectiveBps</code> (Lab C2)</td></tr>
-      <tr><td>Market impact</td><td>Your own buying pushed the price up.</td><td>Yours — you moved the market.</td><td>Low</td><td>Hard</td><td><code>effectiveBps − realisedBps</code></td></tr>
+      <tr><td>Market impact</td><td>Your own buying pushed the price up.</td><td>Yours — you moved the market.</td><td>Low</td><td>Hard</td><td><code>costCurve</code> and <code>.b.istar</code> per parent; per fill, <code>effectiveBps − realisedBps</code> mixes it with adverse selection</td></tr>
       <tr><td>Adverse selection</td><td>You were filled just before the price moved against you.</td><td>Someone else's — they knew more.</td><td>Low</td><td>Hard</td><td>negative short-horizon <code>markout</code></td></tr>
       <tr><td>Timing risk</td><td>The market drifted while you waited to trade.</td><td>Nobody's — it is the price of patience.</td><td>Medium</td><td>Moderate</td><td>the arrival→end gap, and <code>oppBps</code></td></tr>
     </tbody>
@@ -509,13 +509,13 @@ mjx-container svg{max-width:100%}
   <p class="lead">Everything the rest of this document assumes, on one page. The <i>Common mistake</i> column is the useful one: almost every TCA error in practice is conceptual rather than arithmetic — the formula is right and the thing being measured is wrong. Skim it now, come back to it when a number looks odd.</p>
   <div class="tbl"><table class="wide gloss">
     <thead><tr><th>Term</th><th>What it is</th><th>Concretely</th><th>In this stack</th><th>Common mistake</th></tr></thead>
-    <tbody><tr><td>Parent order</td><td>The full instruction from the desk or PM.</td><td>“Buy 50,000 AAPL, work it this morning.”</td><td>the <code>parent</code> table, keyed by <code>parentOrderID</code></td><td>Storing it as a separate record instead of building it up from its fills.</td></tr>
+    <tbody><tr><td>Parent order</td><td>The full instruction from the desk or PM.</td><td>“Buy 50,000 AAPL, work it this morning.”</td><td>the <code>parent</code> table, keyed by <code>parentOrderID</code></td><td>Storing its filled totals as fixed fields instead of building them up from its fills.</td></tr>
       <tr><td>Algo order</td><td>The share of a parent handed to one broker algo, with that algo’s settings.</td><td>30,000 of the 50,000 to a VWAP algo, the rest to an arrival algo.</td><td>the <code>algoOrd</code> table, keyed by <code>algoOrderID</code>; <code>algo</code> on every fill</td><td>Scoring an algo on the parent’s slippage when the parent was split across several algos.</td></tr>
       <tr><td>Child order</td><td>One slice an algo order sends to a venue.</td><td>300 shares to ARCA at the touch.</td><td><code>ord</code> rows carrying a <code>childOrderID</code></td><td>Scoring children individually — cost belongs to the algo order and the parent. On <code>ord</code> the parent’s NEW row has no algo or child id, each algo order’s NEW row has an <code>algoOrderID</code>, and the child ids (<code>C1</code>, <code>C2</code>, …) appear on <code>execs</code>.</td></tr>
       <tr><td>Fill</td><td>A child order, or part of one, that traded.</td><td>180 of those 300 printed at 182.41.</td><td><code>execs where execType="F"</code></td><td>Forgetting one child can produce many fills.</td></tr>
       <tr><td>Fill rate</td><td>Shares executed ÷ shares ordered.</td><td>42,000 of 50,000 → 0.84.</td><td><code>filledQty%qty</code></td><td>Quoting slippage without it. A great price on 10% filled is not a good execution.</td></tr>
-      <tr><td>Resting order book (ROB)</td><td>Every order that has been posted to a venue and is still waiting: not yet filled, not cancelled. It is what an incoming order trades against.</td><td>your 300-share bid at 182.40 sits in it until someone sells to you or you cancel.</td><td><code>bsize</code>, <code>asize</code> are its top level; a <code>liq="A"</code> fill came out of it</td><td>Taking the displayed size as all of it. Hidden and iceberg orders rest there too.</td></tr>
-      <tr><td>Order book</td><td>The live ladder of resting orders at each price.</td><td>500 bid @182.40, 800 offered @182.42.</td><td>the <code>quote</code> table, per venue</td><td>Rebuilding it after the fact instead of stamping it at placement.</td></tr>
+      <tr><td>Resting order book (ROB)</td><td>Every order that has been posted to a venue and is still waiting: not yet filled, not cancelled. It is what an incoming order trades against. Usually called the limit order book (LOB).</td><td>your 300-share bid at 182.40 sits in it until someone sells to you or you cancel.</td><td><code>bsize</code>, <code>asize</code> are its top level; a <code>liq="A"</code> fill came out of it</td><td>Taking the displayed size as all of it. Hidden and iceberg orders rest there too.</td></tr>
+      <tr><td>Order book</td><td>The resting order book as a ladder: total size at each price, which is what a venue displays.</td><td>500 bid @182.40, 800 offered @182.42.</td><td>the <code>quote</code> table, per venue</td><td>Rebuilding it after the fact instead of stamping it at placement.</td></tr>
       <tr><td>Touch</td><td>The best bid and ask — what you can trade against right now.</td><td>182.40 / 182.42.</td><td><code>bid</code>, <code>ask</code>, <code>bsize</code>, <code>asize</code></td><td>Confusing one venue's touch with the NBBO.</td></tr>
       <tr><td>Spread</td><td>Ask minus bid: the toll for immediacy.</td><td>0.02 on a $182 stock ≈ 1.1 bps.</td><td><code>ask-bid</code></td><td>Quoting it in cents across stocks of different prices rather than in bps.</td></tr>
       <tr><td>Mid</td><td>The midpoint of the touch — the nearest thing to one fair price.</td><td>182.41</td><td><code>0.5*(bid+ask)</code></td><td>Writing <code>0.5*m`bid+m`ask</code> on a table <code>m</code>. q reads right to left, so it evaluates <code>`bid+m`ask</code> first: a symbol plus a column of floats, which is a <code>'type</code> error. Bracket each lookup: <code>0.5*(m`bid)+(m`ask)</code>.</td></tr>
@@ -524,14 +524,14 @@ mjx-container svg{max-width:100%}
       <tr><td>Dark pool</td><td>A venue that matches without displaying, usually at the mid.</td><td>MLIT, filling at 182.41.</td><td><code>liq="M"</code></td><td>Expecting its prints on the tape instantly — they report late.</td></tr>
       <tr><td>Tape</td><td>The consolidated record of every print, all venues.</td><td>the US SIP.</td><td>the <code>trade</code> table</td><td>Assuming your own fills appear on it immediately.</td></tr>
       <tr><td>Arrival price</td><td>The mid at the instant the order reached the desk.</td><td>182.41 at 10:02:19.8.</td><td><code>arrivalMid</code>, stamped once in <code>onOrd</code></td><td>Recomputing it later — it is the one number you must record at the moment the order arrives. And not saying <i>which</i> arrival: mid, bid, ask or last.</td></tr>
-      <tr><td>Implementation shortfall</td><td>Average fill versus arrival. The most complete measure of cost.</td><td>Paid 182.58 vs 182.41 → −9.3 bps.</td><td><code>.b.arrival</code> → <code>slipBps</code></td><td>Reporting it without splitting delay, execution and opportunity.</td></tr>
+      <tr><td>Implementation shortfall</td><td>The total gap between the decision (or arrival) mid and what you got: execution slippage on the filled shares, plus delay and opportunity cost on the rest. The most complete measure of cost.</td><td>Paid 182.58 vs 182.41 → −9.3 bps.</td><td><code>.b.arrival</code> → <code>slipBps</code></td><td>Reporting it without splitting delay, execution and opportunity.</td></tr>
       <tr><td>Opportunity cost</td><td>The cost of shares you never executed.</td><td>8,000 unfilled while the price ran 20 bps.</td><td><code>.b.shortfall</code> → <code>oppBps</code></td><td>Omitting it, which flatters every unfilled order.</td></tr>
       <tr><td>VWAP</td><td>Volume-weighted average price of the tape over a window.</td><td>tape 182.49 vs your 182.58.</td><td><code>.b.ivwap</code></td><td>Choosing the window after you know the answer.</td></tr>
-      <tr><td>TWAP</td><td>The simple time-average of the mid over a window.</td><td>mean mid, 09:30–10:00.</td><td><code>.b.twap</code></td><td>Using it where volume is lumpy — it ignores <i>when</i> trading happened.</td></tr>
+      <tr><td>TWAP</td><td>The simple time-average of the mid over a window.</td><td>mean mid, 09:30–10:00.</td><td><code>.b.twap</code></td><td>Using it where volume is lumpy — it ignores <i>when</i> trading happened. Also the name of an algo that trades evenly over time: same word, different thing.</td></tr>
       <tr><td>PWP</td><td>Participation-weighted price: VWAP of the first <code>Q/rate</code> shares after you start.</td><td>100k at 20% → the first 500k shares.</td><td><code>pwpRange</code> (Lab F4)</td><td>Reading the single number without the achievable range around it.</td></tr>
       <tr><td>Markout</td><td>The mid a fixed interval <i>after</i> each fill, versus the fill price.</td><td>−1.97 bps at 60s.</td><td><code>.b.markout</code></td><td>Reading one horizon. The shape across horizons is the signal.</td></tr>
       <tr><td>Effective spread</td><td>2φ(fill − mid at the fill): what immediacy cost you.</td><td>1.1 bps on a touch cross.</td><td><code>.b.spreads</code> → <code>effectiveBps</code></td><td>Forgetting this one is signed <b>positive = cost</b>, unlike the rest.</td></tr>
-      <tr><td>Realised spread</td><td>The same, measured h later: what you kept.</td><td>0.3 bps at 60s.</td><td><code>.b.spreads</code> → <code>realisedBps</code></td><td>Comparing venues at different horizons.</td></tr>
+      <tr><td>Realised spread</td><td>The same cost measured against the mid h later. For a taker, what you still paid once the price had moved; for a maker, what it kept.</td><td>0.3 bps at 60s.</td><td><code>.b.spreads</code> → <code>realisedBps</code></td><td>Comparing venues at different horizons.</td></tr>
       <tr><td>Market impact</td><td>How far your own trading moves the price. Part fades once you stop (temporary); part stays, because your trading revealed information (permanent).</td><td>Buying 200,000 of a name that trades 4M a day: roughly 20 bps by the square-root law.</td><td>caused by <code>impD</code> in the feed; predicted by <code>.b.pretrade</code>; measured per fill by <code>spreads[]</code></td><td>Blaming every adverse move on yourself. Some of it was drift the market was making anyway, some was a counterparty who knew more.</td></tr>
       <tr><td>Price impact</td><td>The per-fill measure: effective minus realised, which is how far the mid moved your way after the fill and stayed there.</td><td>1.1 − 0.3 = 0.8 bps.</td><td><code>effectiveBps-realisedBps</code></td><td>Reading it as pure market impact. The mid also moves when the other side knew something (adverse selection), and this number cannot tell the two apart.</td></tr>
       <tr><td>Adverse selection</td><td>Being filled right before the price moves against you.</td><td>passive fill, mid drops 2 bps in a second.</td><td>negative short-horizon <code>markout</code></td><td>Blaming the algo for what the counterparty knew.</td></tr>
@@ -591,7 +591,7 @@ mjx-container svg{max-width:100%}
     <!-- HDB -->
     <rect x="435" y="150" width="120" height="44" rx="4" fill="var(--sheet)" stroke="var(--sh)" stroke-width="1.5"/>
     <text x="495" y="168" font-weight="600" fill="currentColor">HDB <tspan font-weight="400" fill="var(--muted)" font-size="11">5012</tspan></text>
-    <text x="495" y="184" font-size="10.5" fill="var(--muted)">replayed days</text>
+    <text x="495" y="184" font-size="10.5" fill="var(--muted)">past days, on disk</text>
     <!-- chained TP -->
     <rect x="588" y="280" width="110" height="50" rx="4" fill="var(--sheet)" stroke="var(--lav)" stroke-width="1.6"/>
     <text x="643" y="301" font-weight="600" fill="var(--lav)">CHAINED TP</text>
@@ -607,7 +607,7 @@ mjx-container svg{max-width:100%}
   <g fill="none" stroke="currentColor" stroke-width="1.2">
     <path d="M110 177 H240" marker-end="url(#ah)"/>
     <path d="M360 165 H400 V92 H435" marker-end="url(#ah)"/>
-    <path d="M360 180 H435" marker-end="url(#ah)" stroke-opacity=".55"/>
+    <path d="M495 114 V148" marker-end="url(#ah)" stroke-opacity=".75"/>
   </g>
   <!-- TP to chained TP -->
   <g fill="none" stroke="var(--lav)" stroke-width="1.4">
@@ -618,7 +618,7 @@ mjx-container svg{max-width:100%}
   <g font-family="Schibsted Grotesk,sans-serif" font-size="11" fill="var(--muted)">
     <text x="181" y="168" text-anchor="middle">publish</text>
     <text x="400" y="83" text-anchor="middle">sub</text>
-    <text x="397" y="195" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10.5">replay.q</text>
+    <text x="503" y="135" font-family="JetBrains Mono,monospace" font-size="10.5">end of day</text>
   </g>
   <g font-family="JetBrains Mono,monospace" font-size="10.5" fill="var(--lav)">
     <text x="400" y="300" text-anchor="middle">.u.sub[`;`]</text>
@@ -631,7 +631,7 @@ mjx-container svg{max-width:100%}
   </g>
 </svg>
     </div>
-    <figcaption>Solid arrows carry data; the RDB and HDB serve queries. The lavender subtree is the point: the CEP does not subscribe to the order-flow tickerplant on 5010, it subscribes to a <b>chained</b> TP on 5013. A heavy <code>markouts[]</code> or a stalled TCA query can only ever back up 5013, never the plant that is logging and fanning out live order flow.</figcaption>
+    <figcaption>Solid arrows carry data; the RDB and HDB serve queries, and at end of day the RDB writes the day to disk for the HDB. The lavender subtree is the point: the CEP does not subscribe to the order-flow tickerplant on 5010, it subscribes to a <b>chained</b> TP on 5013. A heavy <code>markouts[]</code> or a stalled TCA query can only ever back up 5013, never the plant that is logging and fanning out live order flow.</figcaption>
   </figure>
 
   <div id="chained-note" class="shard-note">
@@ -671,7 +671,7 @@ mjx-container svg{max-width:100%}
 
   <figure id="timeline"><a id="fig-timeline" style="position:absolute" aria-hidden="true"></a>
     <div class="fig">
-<svg viewBox="0 0 960 336" role="img" aria-label="A timeline of one parent buy order. A decision mid precedes arrival. At arrival the mid is the arrival benchmark. Child fills land across the interval at various venues. The interval VWAP spans the fills. Markout horizons extend one second, ten seconds and sixty seconds past a fill. The closing print is the close benchmark. A strip under the time axis groups them: pre-trade (decision mid, arrival), intraday (interval VWAP, TWAP, participation), post-trade (markouts, close).">
+<svg viewBox="0 0 960 336" role="img" aria-label="A timeline of one parent buy order. A decision mid precedes arrival. At arrival the mid is the arrival benchmark. Child fills land across the interval at various venues. The interval VWAP spans the fills. Markout horizons extend one second, ten seconds and sixty seconds past a fill. The closing print is the close benchmark. A strip under the time axis groups them: pre-trade (decision mid, arrival), intraday (interval VWAP, TWAP, PWP), post-trade (markouts, close).">
   <defs><marker id="t2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
   <!-- axis -->
   <line x1="40" y1="210" x2="920" y2="210" stroke="currentColor" stroke-width="1.2" marker-end="url(#t2)"/>
@@ -712,11 +712,11 @@ mjx-container svg{max-width:100%}
   <!-- markout horizons off one fill -->
   <g font-family="JetBrains Mono,monospace" font-size="10" fill="var(--bad)">
     <line x1="520" y1="112" x2="520" y2="258" stroke="var(--bad)" stroke-dasharray="2 2" stroke-opacity=".5"/>
-    <line x1="560" y1="258" x2="760" y2="258" stroke="var(--bad)" stroke-width="1.2"/>
+    <line x1="520" y1="258" x2="760" y2="258" stroke="var(--bad)" stroke-width="1.2"/>
     <circle cx="560" cy="258" r="2.5"/><text x="560" y="275" text-anchor="middle">+1s</text>
     <circle cx="645" cy="258" r="2.5"/><text x="645" y="275" text-anchor="middle">+10s</text>
     <circle cx="755" cy="258" r="2.5"/><text x="760" y="275" text-anchor="middle">+60s</text>
-    <text x="520" y="252" text-anchor="middle" fill="var(--muted)">markout off a fill →</text>
+    <text x="514" y="262" text-anchor="end" fill="var(--muted)">markout off a fill →</text>
   </g>
 
   <!-- pre / intraday / post-trade strip -->
@@ -727,7 +727,7 @@ mjx-container svg{max-width:100%}
     <text x="50" y="304" font-weight="600" fill="var(--fg)">PRE-TRADE</text>
     <text x="50" y="319" fill="var(--muted)">Benchmarks: decision mid · arrival</text>
     <text x="305" y="304" font-weight="600" fill="var(--s1)">INTRADAY</text>
-    <text x="305" y="319" fill="var(--muted)">Benchmarks: interval VWAP · TWAP · participation</text>
+    <text x="305" y="319" fill="var(--muted)">Benchmarks: interval VWAP · TWAP · PWP</text>
     <text x="705" y="304" font-weight="600" fill="var(--sh)">POST-TRADE</text>
     <text x="705" y="319" fill="var(--muted)">Benchmarks: markouts · close</text>
   </g>
@@ -1724,7 +1724,7 @@ bps:{ 0.01*floor 0.5+100*x };                 / round to 2dp for the eye
       </div>
     </details>
     <details class="srcfile" id="src-dump">
-      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">162 lines</span></summary>
+      <summary><span class="fn">dump.q</span><span class="role">write TCA diagnostics to tcaData.txt</span><span class="lc">165 lines</span></summary>
       <div class="body">
         <div class="desc"><code>\l dump.q</code> then <code>tcaDump[]</code> in the TCA tab runs every benchmark and writes the output to <code>tcaData.txt</code>. Each query is trapped, so one failure prints its error and the rest still run. The outputs in this document came from it.</div>
         <div class="code"><pre>/ exec-tca-stack : write TCA diagnostics to tcaData.txt
@@ -1822,6 +1822,9 @@ tcaQueries:(
   "select n:count i, prevClose:avg vsPrevClose, open:avg vsOpen, availVwap:avg vsAvailVwap, lhoc:avg vsLHOC, midHL:avg vsMidHL, close:avg vsClose by side from dayBench[]";
   "5#brokerReport[]";
   "select n:count i, priceImpr:avg priceImprBps, vsDayVwap:avg vsDayVwapBps, range:avg rangeCapture, feasible:avg feasibleFill by liveBucket:5 xrank liveSec from brokerReport[] where filled&gt;0";
+  "select n:count i, better:avg slipBps&gt;0, worse:avg slipBps&lt;0, avgSlip:avg slipBps by side from arrival[] where filled&gt;0";
+  "a:select parentOrderID,sym,side,qty,fillRate,slipBps from arrival[] where filled&gt;0";
+  "(5#`slipBps xasc a),5#`slipBps xdesc a";
   ".b.vsModel[algoArrival[]; trade; fitC; max execs`time; 0D00:05; 20; 0f]";
   "select averageBps:avg bps by venue from markouts[] where horizon=0D00:01:00";
   "select averageBps:avg bps, medBps:med bps, clampedBps:avg .b.winsor[bps;-25f;25f], n:count i by venue from markouts[]";
@@ -2022,15 +2025,21 @@ q)\\          <span class="c">/ or just exit</span></pre></div>
   <div class="tbl"><table class="wide cheat">
     <thead><tr><th>Metric</th><th>The q</th><th>Answers</th><th>Best for</th><th>Blind to</th></tr></thead>
     <tbody><tr><td>Arrival / IS</td><td>1e4*φ*(arrivalMid-averageFillPrice)%arrivalMid</td><td>Did I execute well, from when the desk got it?</td><td>the primary number</td><td>the delay <i>before</i> arrival; the unfilled remainder</td></tr>
-      <tr><td>Opportunity cost</td><td>(1-fillRate)*1e4*φ*(arrivalMid-endPx)%decisionMid</td><td>What did the shares I never got cost me?</td><td>partial fills</td><td>needs an end price you can defend</td></tr>
+      <tr><td>Opportunity cost</td><td>(1-fillRate)*1e4*φ*(arrivalMid-endPx)%decisionMid <span class="g">(in bps of the decision price, so the parts add up; use arrivalMid if there is no decision price)</span></td><td>What did the shares I never got cost me?</td><td>partial fills</td><td>needs an end price you can defend</td></tr>
+      <tr><td>Four-way IS</td><td>shortfall4[]</td><td>Who held the order when the cost came in?</td><td>desk vs broker accountability</td><td>needs a decision time you rarely have</td></tr>
+      <tr><td>Previous close / open</td><td>1e4*φ*(prevClose-averageFillPrice)%prevClose</td><td>How did I do against last night's mark, or the open?</td><td>orders decided overnight</td><td>everything that happened before you could trade</td></tr>
+      <tr><td>Available VWAP</td><td>cn%cv at arrivalTime</td><td>Did I beat the day's average so far?</td><td>a benchmark with no hindsight</td><td>nothing after arrival</td></tr>
+      <tr><td>LHOC / mid H–L</td><td>0.25*low+high+open+close</td><td>Where in the day's range did I land?</td><td>quick sanity checks</td><td>volume; and it knows the day's high, which you didn't</td></tr>
       <tr><td>Interval VWAP</td><td>(v`size) wavg v`px</td><td>Did I beat the tape over my own window?</td><td>algo comparison</td><td>gameable — you pick the window</td></tr>
       <tr><td>TWAP</td><td>avg 0.5*q[`bid]+q`ask</td><td>Did I beat the clock?</td><td>schedule trading</td><td>ignores when the volume actually arrived</td></tr>
       <tr><td>PWP</td><td>pwpRange[trade;tenor;sy;startTime;Q]</td><td>Did I beat my own opportunity set?</td><td>POV execution</td><td>harder to explain to a PM</td></tr>
       <tr><td>Close</td><td>last px by sym</td><td>Did I beat the print everyone quotes?</td><td>index and benchmark funds</td><td>silent about the path you took</td></tr>
       <tr><td>Markout</td><td>aj[`sym`time; time+h; quote]</td><td>Was I picked off after I traded?</td><td>venue and toxicity analysis</td><td>needs clean quotes past the last fill</td></tr>
       <tr><td>Effective spread <span class="g">(+ = cost)</span></td><td>1e4*2*φ*(lastPx-mid0)%lastPx</td><td>What did immediacy cost me, right then?</td><td>microstructure, fee comparison</td><td>is not the total cost</td></tr>
-      <tr><td>Realised spread <span class="g">(+ = cost)</span></td><td>1e4*2*φ*(lastPx-midh)%lastPx</td><td>How much of that did I keep?</td><td>venue quality</td><td>horizon-sensitive — pick one and stay there</td></tr>
+      <tr><td>Realised spread <span class="g">(+ = cost)</span></td><td>1e4*2*φ*(lastPx-midh)%lastPx</td><td>How much of that did I still pay once the mid moved?</td><td>venue quality</td><td>horizon-sensitive — pick one and stay there</td></tr>
       <tr><td>Impact <span class="g">(+ = cost)</span></td><td>effectiveBps-realisedBps</td><td>How far did the mid move after the fill, and stay?</td><td>sizing and urgency</td><td>routinely confused with adverse selection</td></tr>
+      <tr><td>I-star <span class="g">(+ = cost)</span></td><td>.b.istar[Z;sigmaBps;pov]</td><td>What should this order cost, at this speed?</td><td>pre-trade, comparing schedules</td><td>someone else's fitted constants</td></tr>
+      <tr><td>Value add <span class="g">(+ = cost over model)</span></td><td>vsModel fitC</td><td>Did the algo beat its pre-trade estimate?</td><td>ranking brokers and algos</td><td>a model that knows size but not speed</td></tr>
       <tr><td>OFI</td><td>(sum db)-sum da</td><td>Which side has pressure right now?</td><td>placement context</td><td>context, not a forecast</td></tr>
       <tr><td>POV</td><td>executedQty%tapeVolume</td><td>How hard did I push?</td><td>schedule control</td><td>says nothing about execution quality</td></tr></tbody>
   </table></div>
@@ -2328,6 +2337,7 @@ q)select wAvg:fillRate wavg slipBps from arrival[]   <span class="c">/ book-leve
 q)select n:count i, ops:avg opsBps, timing:avg timingBps, execution:avg execBps, opp:avg oppBps,
     total:avg isBps, maxGap:max abs isBps-opsBps+timingBps+execBps+oppBps from shortfall4[]</pre></div>
     <p class="notice"><code>maxGap</code> is the check that the decomposition is honest: the four parts must sum to Perold's total for every parent, or one of them is double-counting. EDHEC charges delay only on the filled shares; this version charges it on every share and measures opportunity from \(P_S\) instead of \(P_0\). Both sum to the same total.</p>
+    <p>Read the biggest part first. If spread and impact dominate, the order was too big or worked too fast; if timing or opportunity dominates, it waited too long or was worked too slowly in a stock that was moving.</p>
   </div>
 
   <!-- B2 -->
@@ -2462,6 +2472,7 @@ horizon             | averageBps
       <h3><span class="n">C2</span>Spread Capture &amp; the Scorecard</h3>
       <div class="where">Run in <span class="tag tsh">TCA</span></div>
       <p>Effective spread is what you paid versus the mid at the fill; realised spread is the same cost measured against the mid a horizon later; the difference is <b>impact</b> — how far the mid moved your way after the fill and stayed there. All three are two <code>aj</code>s.</p>
+      <p>Which reference you use changes the question. The fill against the <b>mid</b> prices the instrument: how expensive is this stock to trade at all. The fill against the <b>side of the quote you traded on</b> prices your choices: the size, the speed, whether you crossed. The first tells you what to trade; the second, how.</p>
       <p class="notice">The scorecard is what the router should be reading: markout by venue and horizon, one <code>select … by</code>. It can be re-scored intraday, so the router is told before the damage compounds — not in next month's report.</p>
     </div>
     <div class="cmds">
@@ -2670,6 +2681,7 @@ q)costCurve fitC                                 <span class="c">/ one row per b
 q).b.istar[10f;200f;100000%950000]        <span class="c">/ 56.9 bps: EDHEC's €17,070 on €3m</span></pre></div>
     <p>The two models disagree on purpose. Square-root says cost depends on size; I-star says it depends on size <i>and</i> on how fast you go, which is what lets a pre-trade tool price a VWAP schedule and a 10% POV schedule differently for the same order.</p>
     <p>Two cautions. Realised cost against arrival also carries drift that would have happened without you, so the fit is an upper bound on what you caused unless you remove the market's move first (<a href="#lab-f6">F6</a>). And the per-fill <i>price impact</i> in <a href="#lab-c2">C2</a> is a different number. It is the mid's move after a single fill, and it mixes your impact with adverse selection; one fill's worth of evidence cannot separate them.</p>
+    <p><b>Strategy capacity.</b> The same curve answers the question a portfolio manager asks before scaling up. Cost grows with order size relative to volume and with how often you trade, so somewhere there is a size at which expected cost eats the strategy's edge. The cost curve and I-star say where that size is.</p>
   </div>
 
   <!-- E1 -->
@@ -2928,7 +2940,7 @@ q)key `:log/sym
   </g>
 </svg>
     </div>
-    <figcaption>One turn of the wheel. The market's <b>conditions</b> go to the <b>router</b>, which picks the algo for the parent; the algo's own router places the children and produces fills; TCA <b>measures</b> the cost; the <b>learn</b> step updates the weights and hands them back to the router. Each order both <i>uses</i> the current weights and <i>improves</i> them — the loop never stops, so the routing table is always catching up to the market it just saw.</figcaption>
+    <figcaption>One turn of the wheel. The market's <b>conditions</b> go to the <b>wheel</b>, which picks the algo for the parent; the algo's own router places the children and produces fills; TCA <b>measures</b> the cost; the <b>learn</b> step updates the weights and hands them back to the wheel. Each order both <i>uses</i> the current weights and <i>improves</i> them — the loop never stops, so the routing table is always catching up to the market it just saw.</figcaption>
   </figure>
 
   <h3 id="aw-controller"><span class="n">4</span>From Scorecard to Controller</h3>
@@ -3018,7 +3030,7 @@ sizeK   -0.1246076  0.1000023  -1.246047 -0.01317544 0.00787961</pre></div>
 <!-- ───────────── PICTURES ───────────── -->
 <section class="part" id="pictures"><a id="charts" style="position:absolute" aria-hidden="true"></a>
   <h2>One Run in Pictures</h2>
-  <p class="lead">Every chart below is drawn from one file: the <code>tcaData.txt</code> that <code>tcaDump[]</code> wrote at the end of a four-and-a-half-hour run of this stack, with 12,926 parents, 18,106 algo orders and 828,575 execution reports. Nothing was tuned for the pictures. Run the stack again and the numbers will move in the second decimal, but not the shapes: the wheel's ranking below is the fourth run in a row to land within a few hundredths of a bp of the same place.</p>
+  <p class="lead">Every chart below is drawn from one file: the <code>tcaData.txt</code> that <code>tcaDump[]</code> wrote at the end of a four-and-a-half-hour run of this stack, with 12,926 parents, 18,106 algo orders and 828,575 execution reports. Nothing was tuned for the pictures. Run the stack again and the numbers will move in the second decimal, but not the shapes: the wheel's ranking below is the fourth run in a row to land within a few hundredths of a bp of the same place, and a fifth run since has agreed.</p>
   <div class="charts">
     <figure id="pic-venues"><div class="fig"><svg viewBox="0 0 460 280" role="img" aria-label="Venue markout curves from one four-and-a-half-hour run. EDGX sits between minus 0.6 and minus 0.72 bps at every horizon; BATS worsens from minus 0.12 to minus 0.45; ARCA and NSDQ rise to about plus 0.3 by ten seconds and hold; the dark pool MLIT and the internaliser INTL stay small and positive."><line x1="52" y1="236.0" x2="364" y2="236.0" stroke="var(--line)"/><text x="46" y="239.5" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">-0.8</text><line x1="52" y1="167.3" x2="364" y2="167.3" stroke="var(--line)"/><text x="46" y="170.8" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">-0.4</text><line x1="52" y1="98.7" x2="364" y2="98.7" stroke="var(--line)"/><text x="46" y="102.2" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">0</text><line x1="52" y1="30.0" x2="364" y2="30.0" stroke="var(--line)"/><text x="46" y="33.5" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">0.4</text><line x1="52" y1="98.7" x2="364" y2="98.7" stroke="var(--muted)" stroke-width="1"/><text x="104.0" y="251" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">1s</text><text x="208.0" y="251" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">10s</text><text x="312.0" y="251" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">60s</text><text x="52" y="18" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--muted)">markout, bps (+ = favourable)</text><text x="364" y="267" text-anchor="end" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--muted)">horizon after the fill</text><polyline points="104.0,104.0 208.0,40.2 312.0,50.0" fill="none" stroke="var(--s0)" stroke-width="2"/><circle cx="104.0" cy="104.0" r="3" fill="var(--s0)"/><circle cx="208.0" cy="40.2" r="3" fill="var(--s0)"/><circle cx="312.0" cy="50.0" r="3" fill="var(--s0)"/><polyline points="104.0,119.1 208.0,138.1 312.0,175.4" fill="none" stroke="var(--sig)" stroke-width="2"/><circle cx="104.0" cy="119.1" r="3" fill="var(--sig)"/><circle cx="208.0" cy="138.1" r="3" fill="var(--sig)"/><circle cx="312.0" cy="175.4" r="3" fill="var(--sig)"/><polyline points="104.0,222.8 208.0,206.3 312.0,202.6" fill="none" stroke="var(--bad)" stroke-width="2"/><circle cx="104.0" cy="222.8" r="3" fill="var(--bad)"/><circle cx="208.0" cy="206.3" r="3" fill="var(--bad)"/><circle cx="312.0" cy="202.6" r="3" fill="var(--bad)"/><polyline points="104.0,91.1 208.0,67.9 312.0,81.3" fill="none" stroke="var(--ok)" stroke-width="2"/><circle cx="104.0" cy="91.1" r="3" fill="var(--ok)"/><circle cx="208.0" cy="67.9" r="3" fill="var(--ok)"/><circle cx="312.0" cy="81.3" r="3" fill="var(--ok)"/><polyline points="104.0,90.0 208.0,67.5 312.0,75.3" fill="none" stroke="var(--s1)" stroke-width="2"/><circle cx="104.0" cy="90.0" r="3" fill="var(--s1)"/><circle cx="208.0" cy="67.5" r="3" fill="var(--s1)"/><circle cx="312.0" cy="75.3" r="3" fill="var(--s1)"/><polyline points="104.0,104.2 208.0,39.0 312.0,46.8" fill="none" stroke="var(--sh)" stroke-width="2"/><circle cx="104.0" cy="104.2" r="3" fill="var(--sh)"/><circle cx="208.0" cy="39.0" r="3" fill="var(--sh)"/><circle cx="312.0" cy="46.8" r="3" fill="var(--sh)"/><text x="322.0" y="50.3" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" font-weight="600" fill="var(--sh)">NSDQ</text><text x="322.0" y="61.3" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" font-weight="600" fill="var(--s0)">ARCA</text><text x="322.0" y="78.8" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" font-weight="600" fill="var(--s1)">MLIT</text><text x="322.0" y="89.8" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" font-weight="600" fill="var(--ok)">INTL</text><text x="322.0" y="178.9" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" font-weight="600" fill="var(--sig)">BATS</text><text x="322.0" y="206.1" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" font-weight="600" fill="var(--bad)">EDGX</text></svg></div><figcaption><b>Venue markouts</b> (<a href='#lab-c1'>C1</a>). EDGX is bad at once and stays bad, the signature of fast counterparties. BATS gets worse as the horizon lengthens, the signature of informed ones. ARCA and NSDQ drift the order's way: the market keeps moving in the direction it was already going.</figcaption></figure>
     <figure id="pic-liq"><div class="fig"><svg viewBox="0 0 460 280" role="img" aria-label="Markouts by liquidity flag. Taking liquidity costs about 0.4 bps from the first second. Resting orders start ahead, plus 0.23 to 0.26 at one and ten seconds, and give back more than half of it by a minute. Dark and internal fills stay small and positive."><line x1="52" y1="210.2" x2="364" y2="210.2" stroke="var(--line)"/><text x="46" y="213.8" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">-0.4</text><line x1="52" y1="158.8" x2="364" y2="158.8" stroke="var(--line)"/><text x="46" y="162.2" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">-0.2</text><line x1="52" y1="107.2" x2="364" y2="107.2" stroke="var(--line)"/><text x="46" y="110.8" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">0</text><line x1="52" y1="55.8" x2="364" y2="55.8" stroke="var(--line)"/><text x="46" y="59.3" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">0.2</text><line x1="52" y1="107.2" x2="364" y2="107.2" stroke="var(--muted)" stroke-width="1"/><text x="104.0" y="251" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">1s</text><text x="208.0" y="251" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">10s</text><text x="312.0" y="251" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" fill="var(--muted)">60s</text><text x="52" y="18" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--muted)">markout, bps (+ = favourable)</text><text x="364" y="267" text-anchor="end" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" fill="var(--muted)">horizon after the fill</text><polyline points="104.0,214.4 208.0,177.9 312.0,194.2" fill="none" stroke="var(--bad)" stroke-width="2"/><circle cx="104.0" cy="214.4" r="3" fill="var(--bad)"/><circle cx="208.0" cy="177.9" r="3" fill="var(--bad)"/><circle cx="312.0" cy="194.2" r="3" fill="var(--bad)"/><polyline points="104.0,47.4 208.0,39.3 312.0,80.8" fill="none" stroke="var(--s0)" stroke-width="2"/><circle cx="104.0" cy="47.4" r="3" fill="var(--s0)"/><circle cx="208.0" cy="39.3" r="3" fill="var(--s0)"/><circle cx="312.0" cy="80.8" r="3" fill="var(--s0)"/><polyline points="104.0,94.2 208.0,60.5 312.0,72.2" fill="none" stroke="var(--s1)" stroke-width="2"/><circle cx="104.0" cy="94.2" r="3" fill="var(--s1)"/><circle cx="208.0" cy="60.5" r="3" fill="var(--s1)"/><circle cx="312.0" cy="72.2" r="3" fill="var(--s1)"/><polyline points="104.0,95.8 208.0,61.1 312.0,81.2" fill="none" stroke="var(--ok)" stroke-width="2"/><circle cx="104.0" cy="95.8" r="3" fill="var(--ok)"/><circle cx="208.0" cy="61.1" r="3" fill="var(--ok)"/><circle cx="312.0" cy="81.2" r="3" fill="var(--ok)"/><text x="322.0" y="75.7" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" font-weight="600" fill="var(--s1)">dark mid (M)</text><text x="322.0" y="86.7" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" font-weight="600" fill="var(--s0)">added (A)</text><text x="322.0" y="97.7" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" font-weight="600" fill="var(--ok)">internal (I)</text><text x="322.0" y="197.7" font-family="Schibsted Grotesk,sans-serif" font-size="10.5" font-weight="600" fill="var(--bad)">removed (R)</text></svg></div><figcaption><b>By liquidity flag.</b> Taking costs from the first second. Resting looks good for ten seconds and then gives back more than half of it, because a resting order fills when the price comes to it (<a href='#toxicity'>§Toxicity</a>): the rebate is paid up front, the adverse selection a minute later.</figcaption></figure>
@@ -3125,7 +3137,7 @@ q)select sym, maxDiff:abs vwap-bv from daySummary[] lj select bv:(sum notional)%
 <section class="part" id="five-rules"><a id="rules" style="position:absolute" aria-hidden="true"></a>
   <h2>Five Rules</h2>
   <p class="lead">If you remember nothing else, remember these. Each is the general form of several of the mistakes above, and each is argued in full somewhere in the labs.</p>
-  <div class="rules"><div class="rule"><div class="rn">1</div><div><h4>Arrival first, VWAP second</h4><p>VWAP asks whether you traded like everyone else; arrival asks whether you traded well. An order that is a large share of the volume <i>is</i> the VWAP, so the biggest orders flatter it most. Lead with arrival and opportunity cost; show VWAP beside them, never instead of them.</p></div></div>
+  <div class="rules"><div class="rule"><div class="rn">1</div><div><h4>Arrival first, VWAP second</h4><p>VWAP asks whether you traded like everyone else; arrival asks whether you traded well. An order that is a large share of the volume <i>is</i> the VWAP, so the biggest orders flatter it most. Lead with arrival and opportunity cost; show VWAP beside them, never instead of them. And expect any benchmark a desk is paid on to be gamed: arrival is the hardest to game, because it is fixed before you trade.</p></div></div>
     <div class="rule"><div class="rn">2</div><div><h4>Point-in-time, always</h4><p>Every benchmark reads a price that was knowable at the moment being measured. <code>aj</code>, never a plain join. Getting this wrong raises no error. Join a fill to a quote stamped after it and the query still runs and returns a plausible number; it is just measured against a price you couldn't have seen when you traded.</p></div></div>
     <div class="rule"><div class="rn">3</div><div><h4>Cost never travels alone</h4><p>Slippage beside fill rate, the mean beside the median, and one sign convention in every table you publish. A venue gets a row, not a grade: fill rate, markout, realised spread and fee each say something different. A number with nothing beside it is a number someone will misread.</p></div></div>
     <div class="rule"><div class="rn">4</div><div><h4>Curves, not points</h4><p>Markouts across horizons, volume across the day, cost across size. One horizon cannot tell being outrun from being outguessed; one average cannot tell a trend from a tail.</p></div></div>
@@ -3451,7 +3463,7 @@ P1            AAPL S    182.4099 400     182.4029   md       0.3816425  67.68724
         <li><b>+ peer-relative</b> (4.5 h): 21 algo alerts, 16 of them DARK, and 11 venue alerts.</li>
         <li><b>+ once per window, median</b> (3 h): 3 and 3. Four of the six came in the first twenty minutes, so it now waits for ten windows.</li>
       </ol>
-      <p>Two baselines are better than one. <code>exceptions[]</code> asks whether an algo has changed since this morning. <code>vsModel</code> asks whether its orders cost more than their size says they should, using the square-root estimate from <a href="#market-impact">§Market Impact</a>. In a 60-minute run it put ARRIVAL at z = 5.7, costing 0.96 bps against 0.40 predicted. That isn't an execution problem but the model's blind spot: arrival algos trade fast, and a model that only knows size can't see speed, which is the gap I-star closes (<a href="#istar">§Market Impact</a>).</p>
+      <p>Two baselines are better than one. <code>exceptions[]</code> asks whether an algo has changed since this morning. <code>vsModel</code> asks whether its orders cost more than their size says they should, using the square-root estimate from <a href="#market-impact">§Market Impact</a>. The industry calls the gap between a pre-trade estimate and the realised cost the <b>value add</b>, and ranks brokers and algos by it. In a 60-minute run it put ARRIVAL at z = 5.7, costing 0.96 bps against 0.40 predicted. That isn't an execution problem but the model's blind spot: arrival algos trade fast, and a model that only knows size can't see speed, which is the gap I-star closes (<a href="#istar">§Market Impact</a>).</p>
       <p>The router gets the same treatment: <code>venueAlerts</code> flags a venue whose realised spread drifts away from the other venues'.</p>
       <p class="notice">A session baseline cannot see a day that starts badly. In production, the baseline is the wheel's history for that algo and the venue's history on the scorecard, carried over from the HDB.</p>
     </div>
@@ -3600,7 +3612,7 @@ q)12#audit pid</pre></div>
     <div class="notes">
       <h3><span class="n">F12</span>The Broker Report</h3>
       <div class="where">Run in <span class="tag tsh">TCA</span><span class="tag tany">CTRL</span></div>
-      <p>A retail broker's TCA page<sup><a href="#ref-ibkr">10</a></sup> is a useful check on what a client can already see. Beyond arrival and markouts, it shows four numbers the labs above don't compute: <b>price improvement</b> against the far touch when the order arrived, cost against the <b>day's VWAP</b>, the share of the <b>day's high–low range</b> the order captured (a buy at the low captures 100%), and the <b>feasible fill</b>: how much of the order the touch could have filled at once. It then cuts everything by order size, order type and how long the order lived.</p>
+      <p>A retail broker's TCA page<sup><a href="#ref-ibkr">10</a></sup> is a useful check on what a client can already see. Beyond arrival and markouts, it shows four numbers the labs above don't compute: <b>price improvement</b> against the far touch when the order arrived, cost against the <b>day's VWAP</b>, the share of the <b>day's high–low range</b> the order captured (a buy at the low captures 100%), and the <b>feasible fill</b>: how much of the order the touch could have filled at once. It then cuts everything by order size, order type and how long the order lived. Two more pages are standard: the <b>balance of the tails</b> (the share of orders that beat arrival against the share that lost, which a mean hides) and an <b>outlier table</b> of the best and worst orders.</p>
       <p class="warn">Two of these flatter. The day's VWAP and range use prints from after the order finished, so they carry hindsight that arrival does not. They tell a client whether the day went their way, not whether the execution was good.</p>
     </div>
     <div class="cmds">
@@ -3624,7 +3636,14 @@ q)12#audit pid</pre></div>
 
 q)select n:count i, priceImpr:avg priceImprBps, vsDayVwap:avg vsDayVwapBps,
     range:avg rangeCapture, feasible:avg feasibleFill
-    by liveBucket:5 xrank liveSec from brokerReport[] where filled&gt;0</pre></div>
+    by liveBucket:5 xrank liveSec from brokerReport[] where filled&gt;0
+
+<span class="c">/ both tails, not just the mean: what share of parents beat arrival, and what share lost</span>
+q)select n:count i, better:avg slipBps&gt;0, worse:avg slipBps&lt;0, avgSlip:avg slipBps by side from arrival[] where filled&gt;0
+
+<span class="c">/ the outlier page every client report has: the five worst and five best parents</span>
+q)a:select parentOrderID,sym,side,qty,fillRate,slipBps from arrival[] where filled&gt;0
+q)(5#`slipBps xasc a),5#`slipBps xdesc a</pre></div>
     </div>
   </div>
 
@@ -3729,30 +3748,58 @@ window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]},opt
 })();
 </script>
 <script>
-/* q syntax highlighting: keywords from the q language files, minus this stack's column names */
+/* q syntax highlighting. Keywords come from the q language files (minus this stack's column
+   names); operators and iterators follow q4m3 ch. 4. In transcripts only the code and the q)
+   lines are coloured: output lines stay plain. */
 (function(){
   var KW=new Set("abs acos aj aj0 ajf ajf0 all and any asc asin asof atan attr avg avgs bin by ceiling cols cor cos count cov cross csv cut delete deltas desc dev differ distinct div do dsave each ej ema enlist eval except exec exit exp fby fills first fkeys flip floor from get getenv group gtime hclose hcount hdel hopen hsym iasc idesc if ij ijf in insert inter inv key keys last like lj load log lower lsq ltime ltrim mavg max maxs mcount md5 mdev med meta min mins mmax mmin mmu mod msum neg next not null or over parse peach pj plist prd prds prev prior rand rank ratios raze read0 read1 reciprocal reval reverse rload rotate rsave rtrim save scan scov sdev select set setenv show signum sin sqrt ss ssr sublist sum sums sv svar system tables tan til trim type uj ujf ungroup union update upper upsert value var view views vs wavg where while within wj wj1 wsum ww xasc xbar xcol xcols xdesc xexp xgroup xkey xlog xprev xrank".split(" "));
-  var RE=/("(?:\\.|[^"\\])*")|((?:^|(?<=[ \t]))\/(?![:\\]).*)|(^q\)+)|(`[\w.:\/]*)|((?<![\w`])\.[A-Za-z]\w*(?:\.\w+)*)|((?<![\w.`])-?\d[\w:.]*)|((?<![\w.`])[a-z]\w*)|(^\\\w*)/gm;
-  var CLS=[null,"s","c","p","y","z","d","k","z"];
-  function hl(node){
-    var t=node.nodeValue, out=document.createDocumentFragment(), last=0, m, hit=false; RE.lastIndex=0;
+  var RE=/("(?:\\.|[^"\\])*")|((?:^|(?<=[ \t]))\/(?![:\\]).*)|(^q\)+)|(^\\\w*)|(`[\w.:\/]*)|((?<![\w`])\.[A-Za-z]\w*(?:\.\w+)*)|((?<![\w.`])-?\d[A-Za-z0-9:.]*)|((?<![\w.`])[A-Za-z]\w*)|([!~:$<>=+*%&|^#?@,_\-]+|['\/\\]:?)|([{}\[\]();])/gm;
+  var CLS=[null,"s","c","p","z","y","z","d","k","o","b"];
+  var SKIP=".c,.s,.k,.y,.z,.d,.p,.o,.b";
+  function lineMask(text){            /* true = code line, false = output line */
+    var L=text.split("\n"), m=[], seen=false, cont=false;
+    for(var i=0;i<L.length;i++){
+      var l=L[i], c;
+      if(/^q\)/.test(l)){ c=true; seen=true; cont=true; }
+      else if(!seen){ c=true; }
+      else if(cont && /^\s{2,}\S/.test(l)){ c=true; }
+      else if(/^\//.test(l)){ c=true; cont=false; }
+      else { c=false; cont=false; }
+      m.push(c);
+    }
+    return m;
+  }
+  function tokens(t,frag){
+    var last=0,m; RE.lastIndex=0;
     while((m=RE.exec(t))){
       var g=1; while(g<CLS.length && m[g]===undefined) g++;
-      if(g===7 && !KW.has(m[0])) continue;
-      if(m.index>last) out.appendChild(document.createTextNode(t.slice(last,m.index)));
-      var sp=document.createElement("span"); sp.className=CLS[g]; sp.textContent=m[0]; out.appendChild(sp);
-      last=m.index+m[0].length; hit=true;
-      if(m[0].length===0) RE.lastIndex++;
+      if(m[0].length===0){ RE.lastIndex++; continue; }
+      if(g===8 && !KW.has(m[0])) continue;         /* plain variable name */
+      if(m.index>last) frag.appendChild(document.createTextNode(t.slice(last,m.index)));
+      var sp=document.createElement("span"); sp.className=CLS[g]; sp.textContent=m[0]; frag.appendChild(sp);
+      last=m.index+m[0].length;
     }
-    if(!hit) return;
-    if(last<t.length) out.appendChild(document.createTextNode(t.slice(last)));
-    node.parentNode.replaceChild(out,node);
+    if(last<t.length) frag.appendChild(document.createTextNode(t.slice(last)));
   }
   document.querySelectorAll(".code pre").forEach(function(pre){
-    var first=pre.textContent.replace(/^\s+/,"").split("\n")[0];
+    var text=pre.textContent, first=text.replace(/^\s+/,"").split("\n")[0];
     if(/^(#!|---|mkdir|\$ |exec-tca-stack\/|cd |git |printf )/.test(first)) return;
-    var w=document.createTreeWalker(pre,NodeFilter.SHOW_TEXT,{acceptNode:function(n){return n.parentNode.closest(".c,.s,.k,.y,.z,.d,.p")?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT}});
-    var ns=[]; while(w.nextNode()) ns.push(w.currentNode); ns.forEach(hl);
+    var mask=lineMask(text), starts=[0];
+    for(var i=0;i<text.length;i++) if(text[i]==="\n") starts.push(i+1);
+    function lineOf(off){ var lo=0,hi=starts.length-1; while(lo<hi){ var mid=(lo+hi+1)>>1; if(starts[mid]<=off) lo=mid; else hi=mid-1; } return lo; }
+    var w=document.createTreeWalker(pre,NodeFilter.SHOW_TEXT), nodes=[], off=0;
+    while(w.nextNode()){ var n=w.currentNode; nodes.push([n,off]); off+=n.nodeValue.length; }
+    nodes.forEach(function(p){
+      var n=p[0], o=p[1];
+      if(n.parentNode.closest(SKIP)) return;
+      var t=n.nodeValue, frag=document.createDocumentFragment(), pos=0;
+      while(pos<t.length){
+        var nl=t.indexOf("\n",pos), end=nl<0?t.length:nl+1, seg=t.slice(pos,end);
+        if(mask[lineOf(o+pos)]) tokens(seg,frag); else frag.appendChild(document.createTextNode(seg));
+        pos=end;
+      }
+      n.parentNode.replaceChild(frag,n);
+    });
   });
 })();
 </script>
