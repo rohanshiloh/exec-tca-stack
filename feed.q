@@ -47,6 +47,10 @@ dayLen:0D01:00;
 t0:.z.p;
 sessX:{ ((`long$.z.p-t0) mod `long$dayLen)%`long$dayLen };
 uShape:{ d:-1f+2*x; 0.55+1.65*d*d };          / not xexp: a negative base gives 0n
+tapeVol:n#0f;                                  / shares the street printed this tick, per sym
+eVol:{ x*19.5*lot*5.5%n };                     / what a sym prints in a tick, on average, at activity x
+H:300;                                         / a VWAP order's horizon: 30s, inside the 60s expiry
+capV:0.2;                                      / and it never takes more than 20% of a tick's volume
 
 / ── market data ─────────────────────────────────────────────────────────
 / Each fill adds its venue's toxicity (bps) to the two drift pools. Those pools
@@ -69,16 +73,19 @@ pushQuotes:{ nv:count lit; r:n*nv;
   pub[`quote;(sy; vv; m-hs+vj; m+hs+vj; lot*1+r?15; lot*1+r?15)]; };
 
 pushTape:{ k:1|floor (10+rand 20)*uShape sessX[]; ix:k?n;   / 10–29 prints a tick, shaped by the day
-  pub[`trade;(uni ix; pool k?count pool; (mid ix)+0.005*rnd k; lot*1+k?10)]; };
+  sz:lot*1+k?10; tapeVol::@[n#0f; ix; +; `float$sz];          / the VWAP clock reads this
+  pub[`trade;(uni ix; pool k?count pool; (mid ix)+0.005*rnd k; sz)]; };
 
 / ── order / execution flow ──────────────────────────────────────────────
 / parent (the PM's order) -> algo orders (one per broker algo) -> children -> fills.
 / The feed works ALGO orders; a parent is just the sum of its algo orders.
 / limitPx is null for a market order; born is the tick it arrived on.
 active:([algoOrderID:`symbol$()] parentOrderID:`symbol$(); sym:`symbol$(); side:`char$();
-  algo:`symbol$(); qty:`long$(); filledQty:`long$(); limitPx:`float$(); born:`long$());
+  algo:`symbol$(); qty:`long$(); filledQty:`long$(); limitPx:`float$(); born:`long$();
+  wTot:`float$(); wCum:`float$());              / VWAP schedule: volume expected / volume seen so far
 
-spawnParent:{ if[0.08<first 1?1f; :()];       / ~8% of ticks start a parent
+spawnParent:{ u:uShape sessX[];
+  if[(0.08*u)<first 1?1f; :()];               / ~9% of ticks start a parent: more at the open and close
   s:first 1?n; sd:$[0.5>first 1?1f;"B";"S"]; sg:$[sd="B";1f;-1f];
   q:lot*10*1+first 1?40; p:nid"P";
   / 30% of parents carry a limit 1-3 bps through the arrival mid; the rest are market
@@ -97,31 +104,43 @@ spawnParent:{ if[0.08<first 1?1f; :()];       / ~8% of ticks start a parent
   qs:$[0.6>first 1?1f; enlist q; (q1; q-q1)];
   k:count qs; ids:nid'[k#"A"]; al:algoNames neg[k]?count algoNames;   / neg: deal, no repeats
   `active upsert ([] algoOrderID:ids; parentOrderID:k#p; sym:k#uni s; side:k#sd; algo:al;
-    qty:qs; filledQty:k#0; limitPx:k#lim; born:k#nTick);
+    qty:qs; filledQty:k#0; limitPx:k#lim; born:k#nTick; wTot:k#H*eVol u; wCum:k#0f);
   pub[`ord;(k#uni s; k#p; ids; al; k#`; k#sd; k#ot; qs; k#lim; k#"0"; k#`SOR; k#`NEW)]; };
 
 workOrders:{ if[0=count active; :()];
+  / the VWAP clock: each VWAP order counts the street's volume in its name as it prints
+  update wCum:wCum+tapeVol uni?sym from `active where algo=`VWAP;
   a:0!active;
   / a limited order only trades while the touch is inside its limit
   m0:mid uni?a`sym; isBuy:(a`side)="B";
   a:a where (null a`limitPx) | ?[isBuy; (m0+0.01)<=a`limitPx; (m0-0.01)>=a`limitPx];
   a:a lj algoParams;                            / each algo order picks up its algo's behaviour
-  / VWAP and POV follow the market's volume, so they trade more at the open and close
-  pt:a[`pTrade]*?[a[`algo] in `VWAP`POV; uShape sessX[]; 1f];
-  a:a where (count[a]?1f)<1f&pt;                / and only trades on its share of ticks
+  / VWAP trades to a schedule. By now it should have done qty x (volume seen so far
+  / / volume expected over its horizon); it trades only when it is behind that line.
+  / The schedule follows the volume that actually prints, so it speeds up when the
+  / street does. POV trades more often when the market is busy; the others ignore the day.
+  isV:a[`algo]=`VWAP;
+  behind:(`long$a[`qty]*1f&a[`wCum]%a`wTot)-a`filledQty;
+  pt:?[isV; `float$behind>=lot; a[`pTrade]*?[a[`algo]=`POV; uShape sessX[]; 1f]];
+  w:where (count[a]?1f)<1f&pt;                  / each order trades only on its share of ticks
+  a:a w; isV:isV w; behind:behind w;
   if[0=count a; :()];
   c:count a; si:uni?a`sym; sg:?[(a`side)="B"; 1f; -1f]; r:a`route;
   vn:?[r=`lit; litPool c?count litPool; ?[r=`dark; darkPool c?count darkPool; pool c?count pool]];
-  passive:(vn in lit) & (c?1f)<a`pPassive;
+  / a VWAP order more than 10% of its size behind schedule stops resting and crosses
+  late:isV & behind>0.1*a`qty;
+  passive:(vn in lit) & ((c?1f)<a`pPassive) & not late;
+  / VWAP sizes its child to the gap, capped at capV of the tick's volume; the rest draw a size
+  vw:lot*floor ((`float$behind) & capV*tapeVol si)%lot;
+  slice:(a[`qty]-a`filledQty) & ?[isV; vw; lot*a[`sMin]+floor a[`sRange]*c?1f];   / capped at remaining
   / A resting order fills mainly when the market comes to it: here a resting buy is
   / hit as the price falls or holds, never as it rises. That makes adverse selection
   / possible, where filling every resting order by construction would hide it; the
   / rebate is what a venue pays you to accept it. (Real queues also fill through
   / queue advance and contra flow; this feed keeps only the price-driven part.)
-  k:where not passive & 0<sg*(mid si)-prevMid si;
+  k:where (slice>0) & not passive & 0<sg*(mid si)-prevMid si;
   if[0=count k; :()];
-  a:a k; vn:vn k; passive:passive k; si:si k; sg:sg k; c:count k;
-  slice:(a[`qty]-a`filledQty) & lot*a[`sMin]+floor a[`sRange]*c?1f;   / capped at remaining
+  a:a k; vn:vn k; passive:passive k; si:si k; sg:sg k; c:count k; slice:slice k;
   takePx:(mid si)+0.01*sg;                      / take: pay the far touch
   makePx:(prevMid si)-0.01*sg;                  / make: the near touch you were resting on
   px:?[passive; makePx; ?[vn in lit; takePx; mid si]];   / dark / house fill at the mid
@@ -130,7 +149,9 @@ workOrders:{ if[0=count active; :()];
   / functional amend: accumulates when two orders hit the same sym in one tick
   @[`fastD; si; +; neg sg*toxF vn];             / the venue's after-effect, against the trader
   @[`slowD; si; +; neg sg*toxS vn];
-  imp:sg*impK*slice%lot;                        / our own impact: moves the price now, then partly fades
+  / our own impact: moves the price now, then partly fades. The same child costs more
+  / at midday, when fewer shares trade against it, and less at the open and close.
+  imp:sg*impK*(slice%lot)%uShape sessX[];
   @[`impD; si; +; imp]; @[`mid; si; *; 1+1e-4*imp];
   cum:a[`filledQty]+slice; lv:a[`qty]-cum;      / per algo order, mirroring FIX CumQty / LeavesQty
   pub[`execs;(a`sym; a`parentOrderID; a`algoOrderID; a`algo; nid'[c#"C"]; a`side; c#"F";

@@ -68,6 +68,13 @@ tcaQueries:(
   "audit rp";
   "select from vwap[] where parentOrderID=rp";
   "select n:count i by algo, b:-6|6&floor slipBps from algoArrival[] where filled>0";
+  "vo:first exec algoOrderID from algoOrd where algo=`VWAP, qty=filledQty, qty within 8000 16000";
+  "vq:algoOrd vo";
+  "vq";
+  "vb:select mkt:sum size by sec:0D00:00:01 xbar time from trade where sym=vq`sym, time within vq[`arrivalTime]+0D00:00:00 0D00:00:45";
+  "vb:0!update cumMkt:sums mkt, filled:0^fills filled from vb lj select filled:last cumQty by sec:0D00:00:01 xbar time from execs where algoOrderID=vo";
+  "vb";
+  "select n:count i, lifeSec:avg lifeSec, medLife:med lifeSec by algo from select algo:first algo, lifeSec:1e-9*`long$(last time)-first time by algoOrderID from execs";
   "5#bars[]";
   "daySummary[]";
   "select sym, maxDiff:abs vwap-bv from daySummary[] lj select bv:(sum notional)%sum volume by sym from bars[]";
