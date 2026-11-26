@@ -64,6 +64,10 @@ tcaQueries:(
   ".b.venueExceptions[spreads[]; max execs`time; 0D00:02; 0D00:00:10; 5; 0f]";
   "pid:first exec parentOrderID from parent where filledQty>0";
   "12#audit pid";
+  "rp:first exec parentOrderID from parent where filledQty=qty, qty within 10000 15000";
+  "audit rp";
+  "select from vwap[] where parentOrderID=rp";
+  "select n:count i by algo, b:-6|6&floor slipBps from algoArrival[] where filled>0";
   "5#bars[]";
   "daySummary[]";
   "select sym, maxDiff:abs vwap-bv from daySummary[] lj select bv:(sum notional)%sum volume by sym from bars[]";
