@@ -37,6 +37,17 @@ lot:100; seq:0; nTick:0;                       / nTick counts timer ticks (100ms
 nid:{seq+:1; `$x,string seq};                 / monotonic id with a prefix
 rnd:{-1f+2f*x?1f};                            / x draws, uniform on (-1,1)
 
+/ ── the trading day ─────────────────────────────────────────────────────
+/ A real tape is U-shaped: heavy at the open and the close, quiet at lunch, and
+/ the price moves most when the most is trading. The feed compresses one session
+/ into dayLen of wall-clock time and repeats it, so a two-hour run is two days.
+/ uShape scales activity at session fraction x (0 = open, 1 = close): about 2.2x
+/ at either end and 0.55x at midday, roughly the shape of a US equity day.
+dayLen:0D01:00;
+t0:.z.p;
+sessX:{ ((`long$.z.p-t0) mod `long$dayLen)%`long$dayLen };
+uShape:{ d:-1f+2*x; 0.55+1.65*d*d };          / not xexp: a negative base gives 0n
+
 / ── market data ─────────────────────────────────────────────────────────
 / Each fill adds its venue's toxicity (bps) to the two drift pools. Those pools
 / decay, so a pool of D bps must be released as D*(1-decay) per step — otherwise
@@ -44,20 +55,20 @@ rnd:{-1f+2f*x?1f};                            / x draws, uniform on (-1,1)
 / NOTE the `::` — inside a lambda a plain `x:` binds a LOCAL, so the clamp was
 / silently doing nothing. (`x*:` and `x[i]+:` DO amend the global; `x:` does not.)
 / Decay and clamp are folded into one global assignment each.
-mdStep:{ prevMid::mid;
+mdStep:{ prevMid::mid; u:uShape sessX[];
   fastD::(-12f)|12f&0.55*fastD;               / fast decays sub-second, then clamp
   slowD::(-12f)|12f&0.99*slowD;               / slow decays over ~7s, then clamp
   rev:impD*impDecay-1; impD+:rev;             / impact fades: the price gives some back
   drift:1e-4*(0.45*fastD)+(0.01*slowD)+rev;   / per-step share of the move
   pull:0.0005*(value refPx)-mid;              / gentle pull to the anchor px
-  mid+:pull+(mid*vol*rnd n)+(mid*drift); };
+  mid+:pull+(mid*vol*(sqrt u)*rnd n)+(mid*drift); };   / variance scales with activity
 
 pushQuotes:{ nv:count lit; r:n*nv;
   sy:raze nv#'uni; vv:r#lit; m:raze nv#'mid;  / sym-major rows, lit cycled within each sym
   hs:0.01*1+r?3; vj:0.005*rnd r;              / 1–3c half-spread, small per-venue offset
   pub[`quote;(sy; vv; m-hs+vj; m+hs+vj; lot*1+r?15; lot*1+r?15)]; };
 
-pushTape:{ k:10+rand 20; ix:k?n;              / 10–29 background prints near the touch
+pushTape:{ k:1|floor (10+rand 20)*uShape sessX[]; ix:k?n;   / 10–29 prints a tick, shaped by the day
   pub[`trade;(uni ix; pool k?count pool; (mid ix)+0.005*rnd k; lot*1+k?10)]; };
 
 / ── order / execution flow ──────────────────────────────────────────────
@@ -95,7 +106,9 @@ workOrders:{ if[0=count active; :()];
   m0:mid uni?a`sym; isBuy:(a`side)="B";
   a:a where (null a`limitPx) | ?[isBuy; (m0+0.01)<=a`limitPx; (m0-0.01)>=a`limitPx];
   a:a lj algoParams;                            / each algo order picks up its algo's behaviour
-  a:a where (count[a]?1f)<a`pTrade;             / and only trades on its share of ticks
+  / VWAP and POV follow the market's volume, so they trade more at the open and close
+  pt:a[`pTrade]*?[a[`algo] in `VWAP`POV; uShape sessX[]; 1f];
+  a:a where (count[a]?1f)<1f&pt;                / and only trades on its share of ticks
   if[0=count a; :()];
   c:count a; si:uni?a`sym; sg:?[(a`side)="B"; 1f; -1f]; r:a`route;
   vn:?[r=`lit; litPool c?count litPool; ?[r=`dark; darkPool c?count darkPool; pool c?count pool]];
