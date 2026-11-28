@@ -36,6 +36,9 @@ algoNames:exec algo from 0!algoParams;
 lot:100; seq:0; nTick:0;                       / nTick counts timer ticks (100ms each)
 nid:{seq+:1; `$x,string seq};                 / monotonic id with a prefix
 rnd:{-1f+2f*x?1f};                            / x draws, uniform on (-1,1)
+/ q's random seed is fixed, so a restarted feed would replay the same orders with
+/ the same ids into a tickerplant log that already holds them. Seed from the clock.
+system"S ",string 1+`int$.z.t;
 
 / ── the trading day ─────────────────────────────────────────────────────
 / A real tape is U-shaped: heavy at the open and the close, quiet at lunch, and
